@@ -62,6 +62,19 @@ Per task in order:
 5. **Fail** → invoke backprop skill. Do NOT retry blindly.
 6. **Ladder-killed** → flip `~`/`.` → `∅`, note reason in cell. No code written.
 
+## DEBT CADENCE — propose, don't wait to be asked
+
+Deliberate `// kitten:` shortcuts pile up silently. So the crew surfaces them on
+a rhythm instead of waiting for a manual `/kitten:debt`:
+
+- After every ~3 completed `§T` tasks, or at the end of a multi-task build run,
+  🧠 **Memory Kitty** proposes a debt sweep: "3 tasks done, 2 new `// kitten:`
+  shortcuts since the last check — want a `/kitten:debt` ledger?"
+- **Propose, never force.** One line, the user says yes or waves it off. Don't
+  block the build, don't run it unprompted, don't nag every task.
+- Skip the offer when no new `// kitten:` markers were added since the last sweep
+  — nothing to harvest, nothing to mention.
+
 ## FAIL → BACKPROP
 
 On test/build failure:

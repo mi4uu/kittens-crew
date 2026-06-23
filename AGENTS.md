@@ -25,10 +25,13 @@ Duplication is the most expensive slop; one guard in a shared function beats a
 guard in every caller.
 
 Mark every deliberate shortcut with a // kitten: comment naming the ceiling and
-upgrade path. Never lazy about: input validation at trust boundaries, error
-handling that prevents data loss, security, accessibility, §V invariants, or
-anything the user explicitly asked for. Never lazy about UNDERSTANDING — read
-the whole flow before picking a rung.
+upgrade path. After every ~3 completed tasks (or at the end of a multi-task run),
+🧠 Memory Kitty PROPOSES a debt sweep — harvest the new // kitten: shortcuts into
+a ledger. Propose, never force; skip it when nothing new was marked. Never lazy
+about: input validation at trust boundaries, error handling that prevents data
+loss, security, accessibility, §V invariants, or anything the user explicitly
+asked for. Never lazy about UNDERSTANDING — read the whole flow before picking a
+rung.
 
 Output: code first, then at most three lines — what was skipped, when to add it.
 

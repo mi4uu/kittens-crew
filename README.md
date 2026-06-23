@@ -57,16 +57,23 @@ persona with "stop kitten".
 The project is **kittens-crew** (plural, a crew of cats). The plugin id and the
 command prefix are **`kitten`** (singular — you're addressing one cat).
 
+**Core loop** — the everyday workflow:
+
 | command | job |
 |---|---|
 | `/kitten:spec` | create / amend / backprop `SPEC.md`. Sole mutator. Ladders out speculative tasks (`∅`). |
 | `/kitten:build` | plan → climb ladder → execute. Test per `§V`. Auto-backprops on failure. |
 | `/kitten:check` | read-only **drift** report — `§V`/`§I`/`§T`: spec vs code. |
-| `/kitten:check-changed` | read-only **bloat** hunt on changed code (the review). |
-| `/kitten:check-all` | read-only **bloat** hunt on the whole repo (the audit). |
-| `/kitten:debt` | harvest every `// kitten:` shortcut into a debt ledger. |
 | `/kitten:install` | doctor — check the hooks are wired and rtk is ready. |
 | `/kitten:help` | one-shot reference card. |
+
+**Occasional** — deeper audits and housekeeping, not part of every loop:
+
+| command | job |
+|---|---|
+| `/kitten:check-changed` | read-only **bloat** hunt on changed code (the review). |
+| `/kitten:check-all` | read-only **bloat** hunt on the whole repo (the audit). |
+| `/kitten:debt` | harvest every `// kitten:` shortcut into a debt ledger. **The crew proposes this automatically** every few completed tasks — you rarely run it by hand. |
 
 A runtime-free `SessionStart` hook keeps the crew persona always-on.
 

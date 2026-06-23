@@ -4,7 +4,9 @@ argument-hint: "[path | --bare]"
 ---
 
 🧠 **Memory Kitty** hosts this — never forgets what was deferred. One-shot
-report, writes nothing.
+report, writes nothing. You rarely run this by hand: during a build the crew
+proposes a sweep every ~3 completed tasks (see the build skill's DEBT CADENCE).
+This command is the manual trigger for the same harvest.
 
 Grep the repo (or `$ARGUMENTS` path) for `kitten:` markers in comments — every
 comment syntax: `// kitten:`, `# kitten:`, `/* kitten:`, `-- kitten:`,
