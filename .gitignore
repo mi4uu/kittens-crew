@@ -3,3 +3,7 @@ node_modules/
 .DS_Store
 benchmarks/agentic/.work/
 benchmarks/agentic/results.json
+benchmarks/agentic/sequential/.work/
+benchmarks/agentic/sequential/results-seq.json
+benchmarks/agentic/sequential/target/node_modules/
+benchmarks/agentic/sequential/target/bun.lock

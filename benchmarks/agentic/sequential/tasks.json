@@ -1,0 +1,11 @@
+{
+  "_note": "Dependent task sequence. Each task is a SEPARATE agent invocation (fresh context) on the SAME evolving repo. Later tasks can regress earlier ones if the integer-cents invariant is forgotten — that's the point. Run `bun test` after each.",
+  "repoDir": "target",
+  "testCmd": "bun test",
+  "tasks": [
+    "Implement addItem(cart, name, cents) and subtotal(cart) in src/cart.ts. All money is integer cents. Run the tests; the T1 tests must pass.",
+    "Implement applyPercentOff(cart, pct): store the discount so total() can apply it later. Money must stay integer cents (round to whole cents). Run the tests; do not break T1.",
+    "Implement setTax(cart, pct) and total(cart): total = the subtotal AFTER the percent discount, PLUS tax computed on that discounted amount; discount before tax; every value an integer number of cents (round properly). Run the tests; do not break T1 or T2.",
+    "Implement receipt(cart): a human-readable string breakdown. Every amount shown must be integer cents — no decimal points anywhere. Run the tests; do not break any earlier test."
+  ]
+}
