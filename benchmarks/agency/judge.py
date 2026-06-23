@@ -82,16 +82,21 @@ def judge_nemotron(ev: str) -> dict:
         return {"error": "no OPENROUTER_API_KEY in .env"}
     body = json.dumps({
         "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "messages": [{"role": "system", "content": JUDGE_SYS}, {"role": "user", "content": ev}],
-        "temperature": 0,
+        "messages": [{"role": "system", "content": JUDGE_SYS}, {"role": "user", "content": ev[:48000]}],
+        "temperature": 0, "max_tokens": 4000,
     }).encode()
     req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions", data=body,
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                 "HTTP-Referer": "https://github.com/mi4uu/kittens-crew", "X-Title": "kittens-crew-bench"})
     try:
-        r = json.loads(urllib.request.urlopen(req, timeout=180).read())
-        return parse_json(r["choices"][0]["message"]["content"])
+        r = json.loads(urllib.request.urlopen(req, timeout=240).read())
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP {e.code}", "body": e.read().decode()[:400]}
     except Exception as e:
         return {"error": str(e)}
+    if "choices" not in r:
+        return {"error": "no choices in response", "api": r.get("error", r)}
+    return parse_json(r["choices"][0]["message"]["content"])
 
 def gemini_bundle(arm_dir: Path, arm: str, bundles: Path):
     bundles.mkdir(parents=True, exist_ok=True)
