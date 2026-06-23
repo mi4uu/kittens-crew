@@ -1,125 +1,138 @@
-<h1 align="center">kittens-crew</h1>
+<p align="center">
+  <img src="./kittenslogo.png" alt="kittens-crew" width="640"/>
+</p>
 
 <p align="center">
   <strong>spec-driven build pipeline with a lazy-senior quality reflex</strong><br/>
-  <sub>one SPEC.md · three commands · two reflexes · zero sub-agents</sub>
+  <sub>one SPEC.md · a crew of kitties · no sub-agents · caveman-compressed</sub>
 </p>
 
 ---
 
 ## what this is
 
-A fusion of two ideas that each do half the job:
+Two proven ideas, welded into one crew:
 
-- **cavekit's pipeline** — a durable `SPEC.md` that survives context resets,
-  tracks dependencies (§T tasks cite §V invariants and §I interfaces), verifies
-  what's done vs not, and turns every bug into a §B record + §V invariant so it
-  can't recur (backprop).
-- **ponytail's laziness ladder** — before writing a line, climb the rungs and
-  stop at the first that holds: YAGNI → reuse (DRY) → stdlib → native → installed
-  dep → one line → minimum code. Simpler, shorter, more maintainable output.
+- **A durable spec** — `SPEC.md` at the repo root survives context resets. Tasks
+  cite the invariants and interfaces they touch (`§T → §V, §I`), so the pipeline
+  always knows what's done, what's pending, and what depends on what. Every bug
+  becomes a `§B` record plus a `§V` invariant, so it can't come back. That last
+  step is **backprop** — fix the code *and* edit the spec.
+- **A laziness ladder** — before writing a line, climb the rungs and stop at the
+  first that holds: YAGNI → reuse (DRY) → stdlib → native → installed dep → one
+  line → minimum code. Shorter diffs, fewer dependencies, code that's easier to
+  read and maintain.
 
-kittens-crew runs both as **two reflexes in one main thread**:
-
-- **Keeper** owns the spec, the dependencies, the memory.
-- **Builder** climbs the ladder and ships the shortest diff that holds.
-
-**DRY is the hardest-enforced rule** — grep before you write; two copies of a
-rule is a latent 3am bug. DRY outranks YAGNI: YAGNI stops what isn't needed, DRY
-stops what already exists.
+**DRY is the hardest-enforced rule.** Grep before you write; two copies of a
+rule is a latent 3am bug. DRY outranks YAGNI — YAGNI stops what isn't needed,
+DRY stops what already exists.
 
 ## the crew
 
-One thread, six hats — so you always know which part of the crew is talking.
-Each kitty prefixes its line with an emote and a name when it takes the stage
-(one prefix, not per sentence). Character is seasoning; the substance is the
-same with or without the hats.
+One main thread wearing six hats, so you always know which part of the crew is
+talking. Each kitty prefixes its line with an emote and a name when it takes the
+stage. Character is seasoning; the substance is identical with or without the hats.
 
-| 🎩 Orchestrating | 📐 Planning | 🔨 Builder | 😼 Entropy | 🧠 Memory | 🖋️ Scribe |
-|---|---|---|---|---|---|
-| routes + summarises | owns SPEC.md | climbs the ladder | hunts drift & bloat | bug → §B+§V | human docs & comments |
+| | kitty | role | voice |
+|---|---|---|---|
+| 🎩 | **Orchestrating** | routes work, writes the closing summary | calm, in charge |
+| 📐 | **Planning** | owns `SPEC.md` | thoughtful, precise |
+| 🔨 | **Builder** | climbs the ladder, ships the shortest diff | laid-back senior |
+| 😼 | **Entropy** | hunts drift, bloat, duplication | the gleeful troublemaker |
+| 🧠 | **Memory** | turns bugs into `§B` + `§V` | quiet, never forgets |
+| 🖋️ | **Scribe** | human docs & comments (why, not what) | warm, plain-spoken |
 
 See [`CAST.md`](./CAST.md). Drop the voices with "kitties quiet"; drop the whole
 persona with "stop kitten".
 
 ## commands
 
-| cmd | job |
+The project is **kittens-crew** (plural, a crew of cats). The plugin id and the
+command prefix are **`kitten`** (singular — you're addressing one cat).
+
+| command | job |
 |---|---|
 | `/kitten:spec` | create / amend / backprop `SPEC.md`. Sole mutator. Ladders out speculative tasks (`∅`). |
-| `/kitten:build` | plan → climb ladder → execute against spec. Test per §V. Auto-backprops on failure. |
-| `/kitten:check` | read-only **drift** report. §V/§I/§T: spec vs code. |
+| `/kitten:build` | plan → climb ladder → execute. Test per `§V`. Auto-backprops on failure. |
+| `/kitten:check` | read-only **drift** report — `§V`/`§I`/`§T`: spec vs code. |
 | `/kitten:check-changed` | read-only **bloat** hunt on changed code (the review). |
 | `/kitten:check-all` | read-only **bloat** hunt on the whole repo (the audit). |
-| `/kitten:debt` | harvest every `// kitten:` shortcut into a debt ledger. Read-only. |
-| `/kitten:install` | doctor — check hooks are wired and rtk is ready, then offer fixes. |
-| `/kitten:help` | one-shot reference card — commands, the crew, the ladder. |
+| `/kitten:debt` | harvest every `// kitten:` shortcut into a debt ledger. |
+| `/kitten:install` | doctor — check the hooks are wired and rtk is ready. |
+| `/kitten:help` | one-shot reference card. |
 
-Persona is also always-on: a `SessionStart` hook injects the crew reflex every
-session (turn off with "stop kitten" / "normal mode").
+A runtime-free `SessionStart` hook keeps the crew persona always-on.
+
+## benchmarks
+
+Real and reproducible — run it yourself, no fabricated numbers.
+
+```bash
+cd benchmarks && bun install && bun bench
+```
+
+Caveman `SPEC.md` vs the **same spec** written as a normal prose PRD, tokenized
+with `o200k_base`:
+
+| encoding | tokens | chars | lines |
+|---|---:|---:|---:|
+| prose PRD | 596 | 2654 | 60 |
+| **caveman SPEC.md** | **279** | 725 | 32 |
+
+**53% fewer tokens for the same spec** (596 → 279), and the spec reloads on every
+command, so the saving recurs each call. The exact ratio depends on the spec —
+run the bench on your own. Agentic pass-rate evals need real model runs; the
+method is documented in [`benchmarks/`](./benchmarks/) rather than faked.
 
 ## format
 
-See [`FORMAT.md`](./FORMAT.md). Sections: §G goal, §C constraints, §I interfaces,
-§V invariants, §T tasks (pipe table, status `.`/`~`/`x`/`∅`), §B bugs (pipe
-table). Caveman-encoded — ~75% fewer tokens than prose. Deliberate shortcuts in
-code carry `// kitten:` comments naming their ceiling.
-
-## files
-
-```
-plugin.json           plugin manifest
-FORMAT.md             spec schema + caveman encoding + ladder marks
-CAST.md               the crew — who speaks when, the speaking convention
-commands/             /kitten:spec, /kitten:build, /kitten:check (thin wrappers over skills)
-skills/spec           spec mutator — Planning Kitty 📐
-skills/build          plan→ladder→execute — Builder Kitty 🔨
-skills/check          drift + bloat report — Entropy Kitty 😼
-skills/backprop       bug → spec protocol — Memory Kitty 🧠
-skills/ladder         the laziness reflex (Builder's tool)
-skills/scribe         human docs & comments (why-not-what) — Scribe Kitty 🖋️
-hooks/                SessionStart persona + cast activation (zero deps)
-```
+See [`FORMAT.md`](./FORMAT.md). Sections: `§G` goal, `§C` constraints, `§I`
+interfaces, `§V` invariants, `§T` tasks (status `.`/`~`/`x`/`∅`), `§B` bugs.
+Caveman-encoded. Deliberate shortcuts in code carry `// kitten:` comments naming
+their ceiling and upgrade path.
 
 ## install
 
 ```bash
-/plugin marketplace add <this-repo>
-/plugin install kitten      # plugin id is "kitten" (singular) → /kitten: commands
+/plugin marketplace add mi4uu/kittens-crew
+/plugin install kitten        # plugin id is "kitten" → /kitten: commands
 ```
-
-The project is **kittens-crew** (plural — it's a crew of cats), but the plugin id
-and command prefix are **`kitten`** (singular — you're addressing one cat:
-`/kitten:build`). Individual cats keep their singular names too (Builder Kitty).
 
 ## rtk (optional, recommended)
 
 kittens-crew is built to burn few tokens; [rtk](https://github.com/rtk-ai/rtk)
-("Rust Token Killer") takes it further by compressing command output 60–90%
-before it reaches context. It's a separate binary that owns its own Claude Code
-hook, so the integration is just: install it and let it run.
+("Rust Token Killer") goes further, compressing command output 60–90% before it
+reaches context. It's a separate binary that owns its own Claude Code hook:
 
 ```bash
 brew install rtk      # or: cargo install --git https://github.com/rtk-ai/rtk
 rtk init -g           # installs the PreToolUse hook that routes bash through rtk
 ```
 
-Once it's on PATH, the crew prefers rtk for verbose commands (`rtk cargo test`,
-`rtk grep`, `rtk git diff`). One gap rtk warns about: the native Read/Grep/Glob
-tools bypass its hook, so for big scans (`/kitten:check-all`, `/kitten:debt`) the
-crew runs Bash + rtk instead. No rtk installed → plain commands, no nagging.
-
-We deliberately **don't** bundle our own rtk hook — `rtk init -g` already does it,
-and reimplementing its command rewriting would just be duplication to maintain.
+Once it's on PATH, the crew prefers rtk for verbose commands. One gap rtk warns
+about: the native Read/Grep/Glob tools bypass its hook, so for big scans
+(`/kitten:check-all`, `/kitten:debt`) the crew uses Bash + rtk. No rtk → plain
+commands, no nagging. We deliberately don't bundle our own rtk hook — `rtk init
+-g` already does it, and reimplementing it would just be duplication.
 
 ## non-goals
 
-- no sub-agents for writes. Main Claude builds, edits, and writes the spec.
-- no dashboards. `cat SPEC.md` is the dashboard.
-- one thread, one spec, one diff. The only fan-out: read-only scouts on a repo
+- No sub-agents for writes. Main Claude builds, edits, and writes the spec.
+- No dashboards. `cat SPEC.md` is the dashboard.
+- One thread, one spec, one diff. The only fan-out: read-only scouts on a repo
   too big for one pass (`/kitten:check-all`, `spec from-code`) — bounded,
   compressed, never writing. See [`CAST.md`](./CAST.md) SCOUTS.
-- no JSON/YAML spec bodies. Markdown + pipe tables.
+- No JSON/YAML spec bodies. Markdown + pipe tables.
+
+## thanks
+
+kittens-crew stands on the shoulders of [**Julius Brussee**](https://github.com/JuliusBrussee).
+His work — [cavekit](https://github.com/JuliusBrussee/cavekit) (the spec
+pipeline), [caveman](https://github.com/JuliusBrussee/caveman) (token
+compression), and [caveman-code](https://github.com/JuliusBrussee/caveman-code) —
+was the inspiration and the base this is built on. The laziness ladder is owed to
+[ponytail](https://github.com/DietrichGebert/ponytail). Thank you for the
+groundwork.
 
 ## license
 
