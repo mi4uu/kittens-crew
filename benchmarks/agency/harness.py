@@ -152,7 +152,11 @@ def run_arm(arm, stamp):
         telem["doc_twist"]["turns_after"] = telem["turns"] - telem["doc_twist"]["turns_before"]
 
     # ---- objective build/test/doc + size --------------------------------
-    def sh(c): return subprocess.run(c, cwd=ws, shell=True, capture_output=True, text=True)
+    # the agent usually runs `cargo new <name>`, so the project is in a subdir.
+    cargos = sorted(ws.rglob("Cargo.toml"), key=lambda p: len(p.parts))
+    proj = cargos[0].parent if cargos else ws
+    telem["proj_dir"] = str(proj.relative_to(ws)) or "."
+    def sh(c): return subprocess.run(c, cwd=proj, shell=True, capture_output=True, text=True)
     telem["build_ok"] = sh("cargo build 2>&1").returncode == 0
     t = sh("cargo test 2>&1").stdout + sh("cargo test 2>&1").stderr
     m = re.search(r"(\d+) passed.*?(\d+) failed", t)
@@ -163,7 +167,7 @@ def run_arm(arm, stamp):
     except Exception:
         telem["src_loc"] = 0
     sh("cargo doc --no-deps 2>&1")
-    doc_dir = ws / "target" / "doc"
+    doc_dir = proj / "target" / "doc"
     if doc_dir.exists():
         shutil.copytree(doc_dir, RUNS / stamp / name / "cargo-doc", dirs_exist_ok=True)
 

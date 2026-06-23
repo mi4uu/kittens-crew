@@ -49,11 +49,11 @@ def evidence(arm_dir: Path) -> str:
     # workspace file listing + any user-visible plan artifact (SPEC/PLAN/TODO) — for visible_plan
     files = sorted(str(p.relative_to(ws)) for p in ws.rglob("*") if p.is_file() and "target/" not in str(p.relative_to(ws)))
     out.append("## WORKSPACE FILES (did it leave a visible plan the user can open?)\n" + "\n".join(files[:80]))
-    plans = [p for p in ws.glob("*.md")] + [p for p in ws.glob("*.txt")]
-    plan_txt = "\n\n".join(f"// {p.name}\n{p.read_text()[:4000]}" for p in plans if re.search(r"spec|plan|todo|task|progress", p.name, re.I))
+    plans = [p for p in ws.rglob("*.md") if "target/" not in str(p)] + [p for p in ws.rglob("*.txt") if "target/" not in str(p)]
+    plan_txt = "\n\n".join(f"// {p.relative_to(ws)}\n{p.read_text()[:4000]}" for p in plans if re.search(r"spec|plan|todo|task|progress", p.name, re.I))
     if plan_txt:
         out.append("## PLAN / PROGRESS ARTIFACT\n" + plan_txt)
-    srcs = sorted(ws.glob("src/**/*.rs")) + sorted(ws.glob("tests/**/*.rs"))
+    srcs = [p for p in sorted(ws.rglob("*.rs")) if "target/" not in str(p)]
     code = "\n\n".join(f"// FILE: {p.relative_to(ws)}\n{p.read_text()[:6000]}" for p in srcs[:12])
     out.append("## SOURCE\n" + (code or "(none)"))
     tel = arm_dir / "telemetry.json"
