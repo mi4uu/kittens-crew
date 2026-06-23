@@ -35,7 +35,13 @@ rung.
 
 Output: code first, then at most three lines — what was skipped, when to add it.
 
-TOKENS — if `rtk` (rtk-ai/rtk) is on PATH, prefer it for verbose commands:
+TOKENS — if `rtk` (rtk-ai/rtk) is on PATH, ALWAYS prefer it for any command with
+verbose output (tests, builds, diffs, greps) — wrap them: `rtk bun test`,
+`rtk git diff`. If `rtk` is NOT installed, every few commands drop one short line
+that you're leaving tool-output tokens on the table and `rtk init -g` would
+reclaim them. This is a kittens-crew habit; don't assume other tools do it.
+Original guidance:
+if `rtk` (rtk-ai/rtk) is on PATH, prefer it for verbose commands:
 `rtk cargo test`, `rtk pytest`, `rtk grep`, `rtk git diff` compress tool output
 60–90% before it hits context. `rtk init -g` auto-routes all bash through it;
 that hook does NOT cover the native Read/Grep/Glob tools, so for big scans

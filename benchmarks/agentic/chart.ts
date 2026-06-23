@@ -14,6 +14,7 @@ const R = JSON.parse(readFileSync(resPath, "utf8"));
 const COLORS: Record<string, string> = {
   baseline: "#9aa0a6",
   "kittens-crew": "#e6007a",
+  "brief-kittens": "#9b59ff",
   caveman: "#e8a33d",
   ponytail: "#39b54a",
 };
@@ -81,7 +82,7 @@ A real headless Claude Code agent editing [${R.meta.repo.split("/").slice(-1)[0]
 |---|---:|---:|---:|---:|
 ${rows}
 
-**Reading it honestly:** this is two small one-off edits to a tiny repo — exactly the case a spec pipeline does NOT help with, and it shows. On this workload the pure-brevity skills (ponytail on LOC, caveman on tokens/time) lead; kittens-crew carries spec/ladder overhead that only pays off across many dependent tasks, which this bench doesn't exercise. Baseline means: LOC ${R.base.loc}, tokens ${R.base.tokens}, cost $${R.base.cost.toFixed(3)}, time ${R.base.sec.toFixed(0)}s. n=${R.meta.n} per cell over ${R.meta.tasks} tasks — high variance (LOC especially: the agent often makes zero edits). Directional, not a leaderboard. Re-run with more tasks and n via \`bun bench:agentic\`. We publish the unflattering run rather than fake a winning one.
+**Reading it honestly:** these are tiny one-off edits at **n=${R.meta.n}** over ${R.meta.tasks} tasks — the differences here are dominated by run-to-run variance, not skill (kittens-crew's LOC has swung 83%↔119% between runs). A one-off edit is also the wrong workload for a spec pipeline: there's no spec to amortise, no dependent task to protect, no verbose tool output for rtk to compress — so the brevity skills (caveman, ponytail) tend to edge it on raw tokens/LOC while it carries process overhead. The honest test of where kittens-crew shines is the **dependent-task / regression / tool-output** benchmark in [\`sequential/\`](./sequential/), not this micro-bench. \`brief-kittens\` = kittens-crew + "Be brief." (does adding the missing subtractive nudge help? so far: no clear win at this n). Baseline means: LOC ${R.base.loc}, tokens ${R.base.tokens}, cost $${R.base.cost.toFixed(3)}, time ${R.base.sec.toFixed(0)}s. Directional, not a leaderboard. We publish noisy/unflattering runs as-is rather than fake a winner.
 <!-- AGENTIC:END -->`;
 
 const readmePath = join(ROOT, "README.md");

@@ -61,7 +61,9 @@ async function runCell(arm: { name: string; appendFile: string | null }, taskIdx
     cfg.tasks[taskIdx];
   const appendPath = expand(arm.appendFile);
   const args = ["-p", task, "--model", cfg.model, "--dangerously-skip-permissions", "--output-format", "json", "--max-turns", "40"];
-  if (appendPath) args.push("--append-system-prompt", readFileSync(appendPath, "utf8"));
+  let sys = appendPath ? readFileSync(appendPath, "utf8") : "";
+  if (arm.appendExtra) sys += (sys ? "\n\n" : "") + arm.appendExtra; // e.g. brief-kittens = persona + "Be brief."
+  if (sys) args.push("--append-system-prompt", sys);
   const t0 = Date.now();
   const proc = Bun.spawn(["claude", ...args], { cwd: REPO, stdout: "pipe", stderr: "pipe" });
   const out = await new Response(proc.stdout).text();

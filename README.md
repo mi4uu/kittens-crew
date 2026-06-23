@@ -134,11 +134,12 @@ A real headless Claude Code agent editing [slugify](https://github.com/sindresor
 
 | vs no-skill baseline | LOC | tokens | cost | time |
 |---|---:|---:|---:|---:|
-| **kittens-crew** | +19% | +4% | +22% | −1% |
-| **caveman** | +44% | −25% | +4% | −20% |
-| **ponytail** | −25% | −9% | +8% | −12% |
+| **kittens-crew** | −17% | −1% | +7% | −12% |
+| **brief-kittens** | — | +8% | +12% | −19% |
+| **caveman** | −21% | −6% | −2% | −24% |
+| **ponytail** | −21% | +2% | +6% | −13% |
 
-**Reading it honestly:** this is two small one-off edits to a tiny repo — exactly the case a spec pipeline does NOT help with, and it shows. On this workload the pure-brevity skills (ponytail on LOC, caveman on tokens/time) lead; kittens-crew carries spec/ladder overhead that only pays off across many dependent tasks, which this bench doesn't exercise. Baseline means: LOC 8, tokens 2847, cost $0.107, time 48s. n=1 per cell over 2 tasks — high variance (LOC especially: the agent often makes zero edits). Directional, not a leaderboard. Re-run with more tasks and n via `bun bench:agentic`. We publish the unflattering run rather than fake a winning one.
+**Reading it honestly:** these are tiny one-off edits at **n=1** over 2 tasks — the differences here are dominated by run-to-run variance, not skill (kittens-crew's LOC has swung 83%↔119% between runs). A one-off edit is also the wrong workload for a spec pipeline: there's no spec to amortise, no dependent task to protect, no verbose tool output for rtk to compress — so the brevity skills (caveman, ponytail) tend to edge it on raw tokens/LOC while it carries process overhead. The honest test of where kittens-crew shines is the **dependent-task / regression / tool-output** benchmark in [`sequential/`](./sequential/), not this micro-bench. `brief-kittens` = kittens-crew + "Be brief." (does adding the missing subtractive nudge help? so far: no clear win at this n). Baseline means: LOC 12, tokens 2582, cost $0.105, time 51s. Directional, not a leaderboard. We publish noisy/unflattering runs as-is rather than fake a winner.
 <!-- AGENTIC:END -->
 
 ## format
