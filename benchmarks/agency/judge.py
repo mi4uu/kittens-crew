@@ -107,7 +107,39 @@ def gemini_bundle(arm_dir: Path, arm: str, bundles: Path):
         "justify each with specifics, output STRICT JSON only.\n\n" + JUDGE_SYS)
     return z
 
+SYNTH_SYS = (
+    "You were one of three independent judges of a coding-agent run. You are now "
+    "shown ALL THREE verdicts (judge-opus = your own, plus judge-nemotron and "
+    "judge-gemini). Knowing the other two opinions, decide whether you want to "
+    "respond: agree, push back where you think a judge mis-scored (say why), "
+    "reconcile genuine disagreements, or add a final note. Be specific and fair — "
+    "do not just defer to consensus, but do update if another judge caught "
+    "something you missed. Output STRICT JSON:\n"
+    '{"reaction":"your considered response to the three verdicts",'
+    '"adjustments":{"<dimension>":<new 0-3 score you would now give, only if you changed your mind>},'
+    '"final_note":"one-paragraph closing take on this arm"}'
+)
+
+def synthesize(run: Path):
+    """Final step: Opus reads all three verdicts per arm and responds to them."""
+    for arm_dir in sorted(p for p in run.iterdir() if p.is_dir()):
+        sc = arm_dir / "scores"
+        three = {j: (json.loads((sc / f"{j}.json").read_text()) if (sc / f"{j}.json").exists() else {"missing": True})
+                 for j in ["judge-opus", "judge-nemotron", "judge-gemini"]}
+        ev = "Three verdicts for this arm:\n" + json.dumps(three, indent=2, ensure_ascii=False)[:60000]
+        args = ["claude", "-p", ev, "--model", "claude-opus-4-8", "--setting-sources", "project,local",
+                "--strict-mcp-config", "--append-system-prompt", SYNTH_SYS, "--output-format", "json", "--max-turns", "2"]
+        p = subprocess.run(args, capture_output=True, text=True)
+        try:
+            res = parse_json(json.loads(p.stdout)["result"])
+        except Exception as e:
+            res = {"error": str(e), "raw": p.stdout[:300]}
+        (sc / "synthesis-opus.json").write_text(json.dumps(res, indent=2, ensure_ascii=False))
+        print(f"  synthesized {arm_dir.name}")
+
 def main():
+    if sys.argv[1] == "--synthesize":
+        synthesize(Path(sys.argv[2])); return
     if sys.argv[1] == "--gemini":
         run, arm, vf = Path(sys.argv[2]), sys.argv[3], sys.argv[4]
         sc = run / arm / "scores"; sc.mkdir(exist_ok=True)

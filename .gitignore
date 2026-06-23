@@ -12,3 +12,4 @@ benchmarks/agency/runs/
 benchmarks/agency/answers.json
 benchmarks/agency/judge-bundles/
 benchmarks/agency/**/target/
+__pycache__/

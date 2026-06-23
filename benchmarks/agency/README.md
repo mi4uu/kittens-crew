@@ -52,9 +52,14 @@ uv run harness.py                          # writes runs/<stamp>/<arm>/...
 uv run judge.py runs/<stamp>               # writes scores/, judge-bundles/<arm>.zip
 
 # 3. Gemini: paste each judge-bundles/<arm>.zip + the printed prompt into Gemini
-#    Pro, give the verdict back; it's recorded into scores/
+#    Pro, give the verdict back; record it:
+uv run judge.py --gemini runs/<stamp> <arm> verdict.json
 
-# 4. report
+# 4. synthesis: Opus reads ALL THREE verdicts per arm and responds (agree / push
+#    back / reconcile) — a presiding final take
+uv run judge.py --synthesize runs/<stamp>
+
+# 5. report
 uv run report.py runs/<stamp>              # writes results/<date>-agency.md (committed)
 ```
 

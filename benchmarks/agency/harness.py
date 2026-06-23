@@ -24,6 +24,9 @@ def load(p, default=None):
 
 scenario = load(HERE / "scenario.json")
 arms = load(HERE / "arms.json")["arms"]
+if os.environ.get("AGENCY_ARMS"):  # shakeout / subset: comma-separated arm names
+    keep = set(os.environ["AGENCY_ARMS"].split(","))
+    arms = [a for a in arms if a["name"] in keep]
 brief = Path(os.environ["AGENCY_BRIEF_FILE"]).read_text() if os.environ.get("AGENCY_BRIEF_FILE") else (HERE / "brief.md").read_text()
 AUTO = os.environ.get("AGENCY_AUTO")  # shakeout: auto-answer unknown oracle questions, no human
 answers = load(ANSWERS, {})   # normalized-question -> human answer (persists across arms)

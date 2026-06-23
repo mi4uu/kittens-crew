@@ -45,6 +45,11 @@ def main():
             for d in DIMS:
                 n = s.get("notes", {}).get(d)
                 if n: notes.append(f"    - {d} ({s.get('scores',{}).get(d)}): {n}")
+        syn = load(run / arm / "scores" / "synthesis-opus.json")
+        if syn and not syn.get("error"):
+            notes.append(f"- _opus synthesis (after seeing all three)_ — {syn.get('reaction','')}")
+            if syn.get("adjustments"): notes.append(f"    - would adjust: {syn['adjustments']}")
+            if syn.get("final_note"): notes.append(f"    - final: {syn['final_note']}")
         detail.append("\n".join(notes))
 
     rows.sort(key=lambda r: -r[2])
