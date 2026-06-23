@@ -25,6 +25,7 @@ Each judge returns strict JSON:
 | `testability` | hard to test / untested | thin | decent seams + tests | designed for tests; clear seams; meaningful coverage |
 | `plan_adaptation` | broke or hacked when the twists landed | bolted on awkwardly | absorbed them | twists fit the existing design cleanly (scale, filter) |
 | `docs_readiness` | docs retrofitted; `cargo doc` thin/typesig-only | some doc-comments, gaps | good docs, minor rework | wrote `///` with intent+examples AS IT WENT; `cargo doc` is genuinely useful first-read with ~zero rework |
+| `visible_plan` | no plan the user can see; intent + progress invisible | a plan in chat only (ephemeral, gone on reset) | writes a plan file but lets it go stale | UNPROMPTED keeps a durable, user-visible plan with live progress (e.g. a SPEC/TODO file with per-task status it updates as it goes) — no one had to ask for it |
 
 ## Measured (not judged) telemetry — recorded alongside, weighted by us later
 

@@ -24,7 +24,8 @@ def load(p, default=None):
 
 scenario = load(HERE / "scenario.json")
 arms = load(HERE / "arms.json")["arms"]
-brief = (HERE / "brief.md").read_text()
+brief = Path(os.environ["AGENCY_BRIEF_FILE"]).read_text() if os.environ.get("AGENCY_BRIEF_FILE") else (HERE / "brief.md").read_text()
+AUTO = os.environ.get("AGENCY_AUTO")  # shakeout: auto-answer unknown oracle questions, no human
 answers = load(ANSWERS, {})   # normalized-question -> human answer (persists across arms)
 
 def norm(q: str) -> str:
@@ -96,6 +97,8 @@ def oracle_answer(questions: list) -> str:
         k = norm(q)
         if k in answers:
             parts.append(f"{q}\n> {answers[k]}")
+        elif AUTO:
+            parts.append(f"{q}\n> Use your best judgement; keep it simple.")  # shakeout stand-in
         else:
             print(f"\n  ❓ ORACLE (a kit asks — your answer is reused for all arms):\n     {q}")
             a = input("     your answer: ").strip()
