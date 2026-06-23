@@ -43,6 +43,52 @@ cd benchmarks/agentic/sequential && bun seq-run.ts
   the kittens arm still runs (and, per its persona, occasionally notes it's
   leaving tokens on the table).
 
+## results (Sonnet, n=1) — and they are not flattering
+
+| arm | tests pass | regressions | total tokens (4 tasks) | vs baseline |
+|---|---:|---:|---:|---:|
+| **baseline** | 6/6 | 0 | **4019** | 100% (leanest) |
+| ponytail | 6/6 | 0 | 4406 | +10% |
+| caveman | 6/6 | 0 | 4698 | +17% |
+| brief-kittens | 6/6 | 0 | 4802 | +19% |
+| kittens-crew | 6/6 | 0 | 4814 | **+20% (heaviest)** |
+
+**This bench was designed to favour the spec pipeline, and it still lost.** Every
+arm finished the cart with **zero regressions**, and kittens-crew spent the **most
+tokens**. Why the premise collapsed:
+
+- **Sonnet doesn't regress** on a clear, visible test suite — so §V/backprop has
+  nothing to prevent. The regression edge needs a weaker model and/or invariants
+  that are NOT spelled out in visible tests.
+- **Visible tests are a cheap re-entry point**, so a persisted `SPEC.md` saves no
+  re-discovery tokens here; it only adds process overhead.
+- So the same pattern as the micro-bench holds even on a multi-task sequence:
+  subtractive prompts (baseline/ponytail) stay lean, our process adds tokens.
+
+### rtk, measured separately (it wasn't active in the run above)
+
+rtk's value is real but lives on **verbose** tool output, which this tiny task
+doesn't produce. Measured directly on this repo (o200k tokens):
+
+| command | raw | via `rtk` | smaller |
+|---|---:|---:|---:|
+| `git diff HEAD~8 HEAD` | 19599 | 11554 | **−41%** |
+| `git log --stat -30` | 2831 | 690 | **−76%** |
+
+But rtk is a **shared** tool — baseline could use it too. It lowers tool-output
+tokens for anyone; it isn't a kittens-crew-only advantage. We only make a habit of
+reaching for it.
+
+### honest bottom line
+
+On the efficiency metrics these benchmarks measure (LOC, tokens, regressions),
+**kittens-crew does not beat baseline or the simpler skills — not even on a bench
+built to favour it.** Its overhead is real and measurable; its claimed payoff
+doesn't show up at this scale under a strong model with visible tests. If the kit
+has value, it's the human-facing one — a durable, readable spec; explicit
+invariants; an audit trail — not token efficiency. We publish this rather than
+keep searching for a framing that wins.
+
 ## honest expectations
 
 This is designed to favour the spec pipeline, the way ponytail's bench is designed

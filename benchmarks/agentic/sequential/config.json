@@ -1,11 +1,29 @@
 {
-  "_note": "rtk:true only on kittens-crew — it's an intrinsic habit of that kit; other arms don't enable rtk and so don't benefit, exactly as in real use. No arm's behaviour touches another (each runs the full sequence on its own fresh copy).",
-  "model": "haiku",
+  "_note": "rtk:true only on kittens-crew \u2014 it's an intrinsic habit of that kit; other arms don't enable rtk and so don't benefit, exactly as in real use. No arm's behaviour touches another (each runs the full sequence on its own fresh copy).",
+  "model": "sonnet",
   "arms": [
-    { "name": "baseline", "appendFile": null },
-    { "name": "kittens-crew", "appendFile": "../../../AGENTS.md", "rtk": true },
-    { "name": "brief-kittens", "appendFile": "../../../AGENTS.md", "appendExtra": "Be brief.", "rtk": true },
-    { "name": "caveman", "appendFile": "~/.claude/plugins/cache/caveman/caveman/*/caveman/SKILL.md" },
-    { "name": "ponytail", "appendFile": "~/.claude/plugins/cache/ponytail/ponytail/*/skills/ponytail/SKILL.md" }
+    {
+      "name": "baseline",
+      "appendFile": null
+    },
+    {
+      "name": "kittens-crew",
+      "appendFile": "../../../AGENTS.md",
+      "rtk": true
+    },
+    {
+      "name": "brief-kittens",
+      "appendFile": "../../../AGENTS.md",
+      "appendExtra": "Be brief.",
+      "rtk": true
+    },
+    {
+      "name": "caveman",
+      "appendFile": "~/.claude/plugins/cache/caveman/caveman/*/caveman/SKILL.md"
+    },
+    {
+      "name": "ponytail",
+      "appendFile": "~/.claude/plugins/cache/ponytail/ponytail/*/skills/ponytail/SKILL.md"
+    }
   ]
 }
