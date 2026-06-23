@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./kittenslogo.png" alt="kittens-crew" width="640"/>
+  <img src="./kittenslogo.png" alt="kittens-crew"/>
 </p>
 
 <p align="center">
