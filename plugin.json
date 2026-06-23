@@ -1,0 +1,5 @@
+{
+  "name": "kitten",
+  "description": "Spec-driven build pipeline with a lazy-senior quality reflex. One SPEC.md, three commands (/kitten:spec, /kitten:build, /kitten:check). The Keeper tracks goals, interfaces, invariants, tasks and bugs; the Builder climbs the laziness ladder before writing a line. No sub-agents. Caveman-encoded spec. Bug-to-spec backprop. Two proven ideas welded into one crew of kitties: cavekit's durable spec pipeline and ponytail's laziness ladder. v1, and only getting sharper.",
+  "version": "1.0.0"
+}
