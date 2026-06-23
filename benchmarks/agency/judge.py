@@ -76,12 +76,9 @@ def judge_opus(ev: str) -> dict:
     except Exception as e:
         return {"error": str(e), "raw": p.stdout[:300]}
 
-def judge_nemotron(ev: str) -> dict:
-    key = os.environ.get("OPENROUTER_API_KEY")
-    if not key:
-        return {"error": "no OPENROUTER_API_KEY in .env"}
+def _openrouter(model: str, key: str, ev: str) -> dict:
     body = json.dumps({
-        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "model": model,
         "messages": [{"role": "system", "content": JUDGE_SYS}, {"role": "user", "content": ev[:48000]}],
         "temperature": 0, "max_tokens": 4000,
     }).encode()
@@ -89,7 +86,7 @@ def judge_nemotron(ev: str) -> dict:
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
                  "HTTP-Referer": "https://github.com/mi4uu/kittens-crew", "X-Title": "kittens-crew-bench"})
     last = {}
-    for attempt in range(4):  # free 550B provider 504s transiently — retry with backoff
+    for attempt in range(3):
         try:
             r = json.loads(urllib.request.urlopen(req, timeout=300).read())
         except urllib.error.HTTPError as e:
@@ -97,13 +94,25 @@ def judge_nemotron(ev: str) -> dict:
         except Exception as e:
             last = {"error": str(e)}; time.sleep(5 * (attempt + 1)); continue
         if "choices" in r:
-            return parse_json(r["choices"][0]["message"]["content"])
+            res = parse_json(r["choices"][0]["message"]["content"]); res["_model"] = model; return res
         code = (r.get("error") or {}).get("code")
         last = {"error": "no choices", "api": r.get("error", r)}
-        if code in (502, 503, 504, 429):
-            time.sleep(8 * (attempt + 1)); continue
+        if code in (502, 503, 504, 429): time.sleep(8 * (attempt + 1)); continue
         return last
     return last
+
+def judge_nemotron(ev: str) -> dict:
+    """Try the free 550B; if it keeps dying (provider 504s), fall back to the paid
+    model (uses OpenRouter credits on your key)."""
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        return {"error": "no OPENROUTER_API_KEY in .env"}
+    for model in ("nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3-ultra-550b-a55b"):
+        res = _openrouter(model, key, ev)
+        if res.get("scores"):
+            return res
+        print(f"    nemotron {model} failed ({res.get('error')}), falling back..." if ":free" in model else "    nemotron paid also failed")
+    return res
 
 def gemini_bundle(arm_dir: Path, arm: str, bundles: Path):
     bundles.mkdir(parents=True, exist_ok=True)
