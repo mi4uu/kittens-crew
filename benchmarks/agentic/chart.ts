@@ -58,6 +58,11 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
 ${legend}${grid}${bars}
 </svg>`;
 writeFileSync(join(HERE, "agentic-chart.svg"), svg);
+// GitHub renders SVG-via-<img> unreliably; rasterize to PNG if a converter exists.
+let img = "./benchmarks/agentic/agentic-chart.svg";
+for (const cmd of [["inkscape", join(HERE, "agentic-chart.svg"), "--export-type=png", `--export-filename=${join(HERE, "agentic-chart.png")}`, "-w", "1280"], ["rsvg-convert", "-w", "1280", "-o", join(HERE, "agentic-chart.png"), join(HERE, "agentic-chart.svg")]]) {
+  try { if (Bun.spawnSync(cmd).success) { img = "./benchmarks/agentic/agentic-chart.png"; break; } } catch {}
+}
 
 // Markdown table ------------------------------------------------------------
 const delta = (pct: number) => (pct === 100 ? "—" : (pct < 100 ? "−" : "+") + Math.abs(pct - 100) + "%");
@@ -70,13 +75,13 @@ const block = `<!-- AGENTIC:START -->
 
 A real headless Claude Code agent editing [${R.meta.repo.split("/").slice(-1)[0]}](${R.meta.repo}), scored on the \`git diff\` it leaves. Same agent, same ${R.meta.tasks} tasks, with vs without each skill injected — **the agent's global plugins, skills and hooks are stripped per run**, so each arm sees only the one skill. ${R.meta.model}, n=${R.meta.n}.
 
-<p align="center"><img src="./benchmarks/agentic/agentic-chart.svg" alt="agentic benchmark" width="700"/></p>
+<p align="center"><img src="${img}" alt="agentic benchmark" width="700"/></p>
 
 | vs no-skill baseline | LOC | tokens | cost | time |
 |---|---:|---:|---:|---:|
 ${rows}
 
-_Baseline medians: LOC ${R.base.loc}, tokens ${R.base.tokens}, cost $${R.base.cost.toFixed(3)}, time ${R.base.sec.toFixed(0)}s. Small n — re-run \`bun bench:agentic\` to raise it. Honest: a spec pipeline's edge shows on multi-task projects, not single one-off edits._
+**Reading it honestly:** this is two small one-off edits to a tiny repo — exactly the case a spec pipeline does NOT help with, and it shows. On this workload the pure-brevity skills (ponytail on LOC, caveman on tokens/time) lead; kittens-crew carries spec/ladder overhead that only pays off across many dependent tasks, which this bench doesn't exercise. Baseline means: LOC ${R.base.loc}, tokens ${R.base.tokens}, cost $${R.base.cost.toFixed(3)}, time ${R.base.sec.toFixed(0)}s. n=${R.meta.n} per cell over ${R.meta.tasks} tasks — high variance (LOC especially: the agent often makes zero edits). Directional, not a leaderboard. Re-run with more tasks and n via \`bun bench:agentic\`. We publish the unflattering run rather than fake a winning one.
 <!-- AGENTIC:END -->`;
 
 const readmePath = join(ROOT, "README.md");

@@ -104,7 +104,8 @@ try {
 }
 
 // --- aggregate: median per arm per metric, % of baseline --------------------
-const med = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor((s.length - 1) / 2)] : 0; };
+// mean is the honest aggregate at small n; a 2-sample "median" is just the min.
+const med = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const arms = [...new Set(cells.map((c) => c.arm))];
 const metric = (arm: string, k: keyof Cell) => med(cells.filter((c) => c.arm === arm).map((c) => c[k] as number));
 const base = { loc: metric("baseline", "loc"), tokens: metric("baseline", "tokens"), cost: metric("baseline", "cost"), sec: metric("baseline", "sec") };
