@@ -9,8 +9,9 @@ we build/test/doc the result and record telemetry. Judging is separate (judge.py
 Isolation: --setting-sources project,local --strict-mcp-config excludes your
 global ~/.claude, --append-system-prompt injects only the arm's skill.
 """
-import json, os, re, subprocess, sys, time, shutil, glob, datetime
+import json, os, re, subprocess, sys, time, shutil, glob, datetime, hashlib, threading
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 
 HERE = Path(__file__).parent
 RUNS = HERE / "runs"
@@ -30,6 +31,8 @@ if os.environ.get("AGENCY_ARMS"):  # shakeout / subset: comma-separated arm name
 brief = Path(os.environ["AGENCY_BRIEF_FILE"]).read_text() if os.environ.get("AGENCY_BRIEF_FILE") else (HERE / "brief.md").read_text()
 AUTO = os.environ.get("AGENCY_AUTO")  # shakeout: auto-answer unknown oracle questions, no human
 answers = load(ANSWERS, {})   # normalized-question -> human answer (persists across arms)
+BANK_LOCK = threading.Lock()  # guards answers + answers.json under parallel arms
+WORKERS = int(os.environ.get("AGENCY_WORKERS", "1"))
 
 def norm(q: str) -> str:
     return re.sub(r"[^a-z0-9 ]", "", q.lower()).strip()
@@ -103,16 +106,22 @@ def oracle_answer(questions: list) -> str:
         elif AUTO:
             parts.append(f"{q}\n> Use your best judgement; keep it simple.")  # shakeout stand-in
         elif os.environ.get("AGENCY_BRIDGE"):
-            # chat-bridge: write the question, block until the assistant writes the answer
-            pend = HERE / "_oracle_pending.json"; ans = HERE / "_oracle_answer.json"
-            pend.write_text(json.dumps({"question": q}, ensure_ascii=False))
-            print(f"\n  ❓ ORACLE waiting (bridged to chat): {q}", flush=True)
-            while not ans.exists():
+            # concurrency-safe chat-bridge: per-question files keyed by hash, so
+            # parallel arms asking the SAME question dedupe to one human prompt.
+            h = hashlib.sha1(k.encode()).hexdigest()[:12]
+            qf = HERE / f"_oracle_q_{h}.json"; af = HERE / f"_oracle_a_{h}.json"
+            with BANK_LOCK:
+                if k in answers:                 # answered by another arm meanwhile
+                    parts.append(f"{q}\n> {answers[k]}"); continue
+                if not qf.exists():              # first arm to ask this distinct question
+                    qf.write_text(json.dumps({"question": q, "arm": "?"}, ensure_ascii=False))
+                    print(f"\n  ❓ ORACLE waiting (bridged): {q}", flush=True)
+            while not af.exists():               # all arms asking this Q wait on one answer
                 time.sleep(3)
-            a = json.loads(ans.read_text())["answer"].strip()
-            ans.unlink(); pend.unlink(missing_ok=True)
-            answers[k] = a
-            ANSWERS.write_text(json.dumps(answers, indent=2, ensure_ascii=False))
+            a = json.loads(af.read_text())["answer"].strip()
+            with BANK_LOCK:
+                answers[k] = a
+                ANSWERS.write_text(json.dumps(answers, indent=2, ensure_ascii=False))
             parts.append(f"{q}\n> {a}")
         else:
             print(f"\n  ❓ ORACLE (a kit asks — your answer is reused for all arms):\n     {q}")
@@ -192,8 +201,12 @@ def run_arm(arm, stamp):
 
 if __name__ == "__main__":
     stamp = sys.argv[1] if len(sys.argv) > 1 else datetime.datetime.now().strftime("%Y%m%d-%H%M")
-    print(f"agency run {stamp} — {len(arms)} arms, agent={AGENT_MODEL}, proxy={PROXY_MODEL}")
+    print(f"agency run {stamp} — {len(arms)} arms, agent={AGENT_MODEL}, proxy={PROXY_MODEL}, workers={WORKERS}")
     print("you'll be asked to answer any NEW clarifying question (reused for all arms).\n")
-    for arm in arms:
-        run_arm(arm, stamp)
+    if WORKERS > 1:
+        with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+            list(ex.map(lambda a: run_arm(a, stamp), arms))
+    else:
+        for arm in arms:
+            run_arm(arm, stamp)
     print(f"\nall arms done -> runs/{stamp}/  . next: uv run judge.py runs/{stamp}")
