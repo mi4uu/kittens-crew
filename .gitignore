@@ -7,3 +7,8 @@ benchmarks/agentic/sequential/.work/
 benchmarks/agentic/sequential/results-seq.json
 benchmarks/agentic/sequential/target/node_modules/
 benchmarks/agentic/sequential/target/bun.lock
+benchmarks/agency/.env
+benchmarks/agency/runs/
+benchmarks/agency/answers.json
+benchmarks/agency/judge-bundles/
+benchmarks/agency/**/target/

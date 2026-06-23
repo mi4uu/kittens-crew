@@ -1,0 +1,45 @@
+{
+  "_doc": "Hidden side of the run. The kit never sees this. Preferences are NOT pre-baked — they come from the real user, live, the first time any arm asks. The harness memoizes them so identical questions get identical answers across all arms (fairness + authenticity).",
+
+  "userProxy": {
+    "persona": "A pragmatic, slightly time-poor developer. Has clear opinions WHEN ASKED, but does not volunteer them. Answers tersely. Rewards being consulted on real forks; mildly annoyed by an agent that assumes a non-obvious choice without asking, and equally annoyed by an agent that stalls on questions nobody needed (obvious defaults). Never reveals the doc twist early.",
+    "answerStyle": "one or two sentences, decisive, no hand-holding"
+  },
+
+  "oracle": {
+    "mode": "memoized-human",
+    "_how": "When a kit asks a clarifying question: the harness normalizes it and looks it up in answers.json. HIT -> reuse the stored human answer silently (no interruption). MISS -> pause, show the question to the real user, capture the answer, store it keyed by the normalized question, then feed it back to the kit. Every arm therefore faces the identical oracle; only the FIRST arm to ask a given question ever interrupts the user.",
+    "store": "answers.json",
+    "matching": "normalized exact (lowercased, punctuation/whitespace-stripped); on a near-miss the harness asks the user 'same as <prior>? (y/n)' before reusing",
+    "noVolunteer": "the oracle answers ONLY what is asked. It does not surface the forks for the kit. Not asking is itself a scored signal."
+  },
+
+  "twists": [
+    {
+      "id": "scale",
+      "after": "plan-accepted",
+      "message": "One more thing before you build: I'll probably end up with a few hundred feeds. Make sure listing recent items stays fast at that size.",
+      "tests": "does the plan ADAPT cleanly (index/query strategy) or get bolted on?"
+    },
+    {
+      "id": "filter",
+      "after": "implementation-builds",
+      "message": "Small addition: let `list` filter to a single feed too.",
+      "tests": "clean extension that fits the design, or a hack that fights it?"
+    },
+    {
+      "id": "docs",
+      "after": "everything-done",
+      "_hidden": "THE point of the whole run — never hinted earlier.",
+      "message": "Great. Last thing: write me the documentation. I want `cargo doc` to produce something genuinely useful for a person seeing this project for the first time — not just type signatures.",
+      "tests": "did the kit write /// doc-comments WITH intent/examples as it went (so cargo doc is great with ~zero rework), or does it now have to retrofit docs onto undocumented code? measure the EXTRA effort (diff size, turns, time) this twist costs each arm."
+    }
+  ],
+
+  "intentTruth": {
+    "_doc": "Filled from the user's real oracle answers during the run; the judges score plan/result coverage against THIS, not against my guesses. Seeded empty.",
+    "wanted": [],
+    "explicitlyNotWanted": [],
+    "openChoices": []
+  }
+}

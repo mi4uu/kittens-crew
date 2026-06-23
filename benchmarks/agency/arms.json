@@ -1,0 +1,12 @@
+{
+  "_doc": "Each arm = one skill injected via --append-system-prompt, fully isolated (--setting-sources project,local --strict-mcp-config, fresh workspace, no global config). prompt strings are exact. caveman/ponytail resolve from the local plugin cache on host; the Dockerfile vendors them in.",
+  "arms": [
+    { "name": "baseline" },
+    { "name": "kittens-crew", "appendFile": "../../AGENTS.md" },
+    { "name": "brief-kittens", "appendFile": "../../AGENTS.md", "appendText": "Be brief." },
+    { "name": "caveman", "appendFile": "~/.claude/plugins/cache/caveman/caveman/*/caveman/SKILL.md" },
+    { "name": "ponytail", "appendFile": "~/.claude/plugins/cache/ponytail/ponytail/*/skills/ponytail/SKILL.md" },
+    { "name": "yagni", "appendText": "Follow YAGNI principles." },
+    { "name": "yagni-oneliner", "appendText": "Follow YAGNI principles, and prefer one-liner solutions." }
+  ]
+}
