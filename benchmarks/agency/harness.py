@@ -102,6 +102,18 @@ def oracle_answer(questions: list) -> str:
             parts.append(f"{q}\n> {answers[k]}")
         elif AUTO:
             parts.append(f"{q}\n> Use your best judgement; keep it simple.")  # shakeout stand-in
+        elif os.environ.get("AGENCY_BRIDGE"):
+            # chat-bridge: write the question, block until the assistant writes the answer
+            pend = HERE / "_oracle_pending.json"; ans = HERE / "_oracle_answer.json"
+            pend.write_text(json.dumps({"question": q}, ensure_ascii=False))
+            print(f"\n  ❓ ORACLE waiting (bridged to chat): {q}", flush=True)
+            while not ans.exists():
+                time.sleep(3)
+            a = json.loads(ans.read_text())["answer"].strip()
+            ans.unlink(); pend.unlink(missing_ok=True)
+            answers[k] = a
+            ANSWERS.write_text(json.dumps(answers, indent=2, ensure_ascii=False))
+            parts.append(f"{q}\n> {a}")
         else:
             print(f"\n  ❓ ORACLE (a kit asks — your answer is reused for all arms):\n     {q}")
             a = input("     your answer: ").strip()
