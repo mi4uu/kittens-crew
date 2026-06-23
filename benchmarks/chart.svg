@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="158" viewBox="0 0 720 158" role="img">
+  <rect width="720" height="158" rx="12" fill="#1b1d22"/>
+  <text x="16" y="30" font-size="15" font-weight="700" fill="#15d6c6" font-family="ui-monospace,monospace">same spec · 53% fewer tokens (o200k)</text>
+    <text x="16" y="60" font-size="15" fill="#e8eaed" font-family="ui-monospace,monospace">prose PRD</text>
+    <rect x="150" y="40" width="538" height="26" rx="5" fill="#9aa0a6"/>
+    <text x="696" y="59" font-size="14" fill="#e8eaed" font-family="ui-monospace,monospace">596 tok</text>
+    <text x="16" y="106" font-size="15" fill="#e8eaed" font-family="ui-monospace,monospace">caveman SPEC</text>
+    <rect x="150" y="86" width="251.8489932885906" height="26" rx="5" fill="#e6007a"/>
+    <text x="409.8489932885906" y="105" font-size="14" fill="#e8eaed" font-family="ui-monospace,monospace">279 tok</text>
+</svg>

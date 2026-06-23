@@ -9,8 +9,9 @@ OK first.
 ## CHECKS — run these, read-only
 
 1. **Plugin wiring** — confirm the plugin files exist under `${CLAUDE_PLUGIN_ROOT}`:
-   `hooks/hooks.json`, `hooks/persona.txt`, `skills/`, `commands/`. The persona
-   hook is runtime-free (`cat`/`type`) — no node or bun required; say so.
+   `hooks/hooks.json`, `AGENTS.md`, `skills/`, `commands/`. The persona hook is
+   runtime-free (`cat`/`type`) — no node or bun required; say so. `AGENTS.md`
+   also serves Pi / opencode / other agents.md-aware agents.
 2. **Persona active?** — if this session opened with `KITTENS-CREW ACTIVE` in
    context, the SessionStart hook fired. If not, the plugin may be installed but
    not enabled, or the session predates it (tell them to restart the session).

@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat \"${CLAUDE_PLUGIN_ROOT}/hooks/persona.txt\"",
-            "commandWindows": "type \"%CLAUDE_PLUGIN_ROOT%\\hooks\\persona.txt\"",
+            "command": "cat \"${CLAUDE_PLUGIN_ROOT}/AGENTS.md\"",
+            "commandWindows": "type \"%CLAUDE_PLUGIN_ROOT%\\AGENTS.md\"",
             "timeout": 5,
             "statusMessage": "Loading kittens-crew..."
           }

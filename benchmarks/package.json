@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bench": "bun compression.ts"
+    "bench": "bun bench.ts"
   },
   "dependencies": {
     "gpt-tokenizer": "^2.9.0"
