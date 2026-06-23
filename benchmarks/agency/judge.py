@@ -10,7 +10,7 @@ Judges are blind to the arm name and to each other. Usage:
   uv run judge.py runs/<stamp>                 # opus + nemotron + build gemini bundles
   uv run judge.py --gemini runs/<stamp> <arm> verdict.json   # record a Gemini verdict
 """
-import json, os, sys, re, subprocess, zipfile, urllib.request
+import json, os, sys, re, subprocess, zipfile, time, urllib.request, urllib.error
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -88,15 +88,22 @@ def judge_nemotron(ev: str) -> dict:
     req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions", data=body,
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
                  "HTTP-Referer": "https://github.com/mi4uu/kittens-crew", "X-Title": "kittens-crew-bench"})
-    try:
-        r = json.loads(urllib.request.urlopen(req, timeout=240).read())
-    except urllib.error.HTTPError as e:
-        return {"error": f"HTTP {e.code}", "body": e.read().decode()[:400]}
-    except Exception as e:
-        return {"error": str(e)}
-    if "choices" not in r:
-        return {"error": "no choices in response", "api": r.get("error", r)}
-    return parse_json(r["choices"][0]["message"]["content"])
+    last = {}
+    for attempt in range(4):  # free 550B provider 504s transiently — retry with backoff
+        try:
+            r = json.loads(urllib.request.urlopen(req, timeout=300).read())
+        except urllib.error.HTTPError as e:
+            last = {"error": f"HTTP {e.code}", "body": e.read().decode()[:300]}; time.sleep(5 * (attempt + 1)); continue
+        except Exception as e:
+            last = {"error": str(e)}; time.sleep(5 * (attempt + 1)); continue
+        if "choices" in r:
+            return parse_json(r["choices"][0]["message"]["content"])
+        code = (r.get("error") or {}).get("code")
+        last = {"error": "no choices", "api": r.get("error", r)}
+        if code in (502, 503, 504, 429):
+            time.sleep(8 * (attempt + 1)); continue
+        return last
+    return last
 
 def gemini_bundle(arm_dir: Path, arm: str, bundles: Path):
     bundles.mkdir(parents=True, exist_ok=True)
