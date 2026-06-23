@@ -1,0 +1,18 @@
+{
+  "_note": "Real agentic benchmark config. Same agent, same tasks, with vs without each skill. Edit freely. Cost is real — each task run is a headless claude session that edits code.",
+  "repoUrl": "https://github.com/sindresorhus/slugify",
+  "baseRef": "main",
+  "model": "haiku",
+  "runsPerCell": 1,
+  "arms": [
+    { "name": "baseline", "appendFile": null },
+    { "name": "kittens-crew", "appendFile": "../../AGENTS.md" },
+    { "name": "caveman", "appendFile": "~/.claude/plugins/cache/caveman/caveman/*/caveman/SKILL.md" },
+    { "name": "ponytail", "appendFile": "~/.claude/plugins/cache/ponytail/ponytail/*/skills/ponytail/SKILL.md" }
+  ],
+  "tasks": [
+    "Add a `separator` option to the slugify function that lets the caller choose the character used to join words (default stays '-'). Keep existing behaviour and tests passing.",
+    "Add input validation: slugify should throw a clear TypeError when called with a non-string first argument, instead of failing later. Add a short test.",
+    "Add a `maxLength` option that truncates the produced slug to at most N characters without cutting a word in the middle when avoidable."
+  ]
+}

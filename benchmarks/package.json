@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bench": "bun bench.ts"
+    "bench": "bun bench.ts",
+    "bench:agentic": "cd agentic && bun run.ts",
+    "chart:agentic": "cd agentic && bun chart.ts"
   },
   "dependencies": {
     "gpt-tokenizer": "^2.9.0"

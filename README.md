@@ -113,8 +113,19 @@ just a single skill.
 | ponytail (full ruleset) | 1582 |
 | kittens-crew (persona) | 835 |
 
-_Rows other than kittens-crew need that plugin installed locally to measure. Token-per-task pass-rate comparisons need real model runs — method in [`benchmarks/`](./benchmarks/), not faked._
+_Rows other than kittens-crew need that plugin installed locally to measure._
 <!-- BENCH:END -->
+
+### Numbers — a real agent doing real work
+
+The honest measurement: a headless Claude Code agent editing a real repo, scored
+on the `git diff` it leaves, with each arm's **global plugins, skills and hooks
+stripped per run** so it sees only the one skill. Harness in
+[`benchmarks/agentic/`](./benchmarks/agentic/) (`bun bench:agentic`).
+
+<!-- AGENTIC:START -->
+<!-- run `bun bench:agentic && bun chart:agentic` to populate -->
+<!-- AGENTIC:END -->
 
 ## format
 
