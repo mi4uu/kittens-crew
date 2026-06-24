@@ -11,6 +11,7 @@ mod check;
 mod config;
 mod drift;
 mod plan;
+mod score;
 mod spec;
 mod store;
 
@@ -44,6 +45,8 @@ enum Cmd {
         #[command(subcommand)]
         action: CheckAction,
     },
+    /// Graded conformance score (T48, V31): how close to ideal, 0-100% per dim.
+    Score,
     /// Hook orchestration (T5-T8). Reads JSON from stdin (Claude Code hook contract).
     Hook {
         /// Hook event: session-start | pre-tool | post-tool | pre-compact.
@@ -163,6 +166,7 @@ fn run(cli: Cli) -> Result<(), KittenError> {
         Cmd::Spec { action } => spec_cmd(action),
         Cmd::Plan { action } => plan_cmd(action),
         Cmd::Check { action } => check_cmd(action),
+        Cmd::Score => score_cmd(),
         Cmd::Config { action } => config_cmd(action),
         Cmd::Hook { event } => hook::dispatch(&event),
         Cmd::Init => init_stub(),
@@ -187,6 +191,20 @@ fn kitty_list() -> Result<(), KittenError> {
 
 const SPEC_PATH: &str = "SPEC.md";
 
+/// T47/V30: a render-triggering cmd must not clobber a pending manual SPEC.md
+/// edit. If the on-disk file diverges from the store projection, abort and tell
+/// the caller to reconcile via `spec drift --apply` first.
+fn ensure_synced(store: &store::Store) -> Result<(), KittenError> {
+    let on_disk = std::fs::read_to_string(SPEC_PATH).unwrap_or_default();
+    if !on_disk.is_empty() && !spec::is_synced(store, &on_disk) {
+        return Err(KittenError::Validation(
+            "SPEC.md diverges from store (manual edit?) — run `kittenscrew spec drift --apply` to reconcile first"
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
 fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
     use std::path::Path;
     match action {
@@ -207,6 +225,7 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
         SpecAction::Apply => {
             let store_path = Path::new(store::STORE_PATH);
             let mut s = store::Store::load(store_path)?;
+            ensure_synced(&s)?; // T47: don't clobber a pending manual SPEC.md edit
             let mut input = String::new();
             std::io::stdin().read_to_string(&mut input)?;
             // Accept a single diff object or an array of diffs (batch).
@@ -400,6 +419,7 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
             Ok(())
         }
         PlanAction::Done { id } => {
+            ensure_synced(&s)?; // T47: don't clobber a pending manual SPEC.md edit
             let mut s = s;
             let t = s
                 .tasks
@@ -422,6 +442,7 @@ fn check_cmd(action: CheckAction) -> Result<(), KittenError> {
         CheckAction::Done => {
             let store_path = Path::new(store::STORE_PATH);
             let mut s = store::Store::load(store_path)?;
+            ensure_synced(&s)?; // T47: a demote re-renders — don't clobber manual edits
             let reports = check::check_done(&s);
             let k = kitty::lookup("entropy").expect("entropy kitty");
 
@@ -474,6 +495,35 @@ fn check_cmd(action: CheckAction) -> Result<(), KittenError> {
             )))
         }
     }
+}
+
+/// All CLI subcommand paths (clap introspection) — e.g. "spec apply", "plan next".
+fn binary_cmds() -> std::collections::HashSet<String> {
+    use clap::CommandFactory;
+    fn walk(cmd: &clap::Command, prefix: &str, out: &mut std::collections::HashSet<String>) {
+        for sub in cmd.get_subcommands() {
+            let path = if prefix.is_empty() {
+                sub.get_name().to_string()
+            } else {
+                format!("{prefix} {}", sub.get_name())
+            };
+            walk(sub, &path, out);
+            out.insert(path);
+        }
+    }
+    let mut out = std::collections::HashSet::new();
+    walk(&Cli::command(), "", &mut out);
+    out
+}
+
+fn score_cmd() -> Result<(), KittenError> {
+    use std::path::Path;
+    let s = store::Store::load(Path::new(store::STORE_PATH))?;
+    let on_disk = std::fs::read_to_string(SPEC_PATH).unwrap_or_default();
+    let synced = on_disk.is_empty() || spec::is_synced(&s, &on_disk);
+    let sc = score::conformance(&s, &binary_cmds(), synced);
+    println!("{}", serde_json::to_string_pretty(&sc).unwrap());
+    Ok(())
 }
 
 fn config_cmd(action: ConfigAction) -> Result<(), KittenError> {

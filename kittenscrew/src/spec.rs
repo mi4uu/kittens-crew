@@ -568,6 +568,15 @@ fn apply_status(store: &mut Store, p: &serde_json::Value, status: Status) -> Res
     Ok(())
 }
 
+// ---- sync guard (T47, V30) -------------------------------------------------
+
+/// True when `spec_md` exactly matches the store's projection — i.e. no manual
+/// SPEC.md edit is pending. Render-triggering commands check this first so a
+/// hand edit isn't silently clobbered by a re-render from a stale store.
+pub fn is_synced(store: &Store, spec_md: &str) -> bool {
+    render(store).trim_end() == spec_md.trim_end()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -827,5 +836,15 @@ T3|∅|custom cache|-|-   (ladder: stdlib covers it)\n\n\
         )
         .unwrap();
         assert!(validate(&s).iter().any(|v| v.contains("missing task T999")));
+    }
+
+    #[test]
+    fn is_synced_true_for_projection_false_after_edit() {
+        let s = import(SAMPLE).unwrap();
+        let rendered = render(&s);
+        assert!(is_synced(&s, &rendered));
+        assert!(is_synced(&s, &format!("{rendered}\n\n"))); // trailing ws ignored
+        let edited = rendered.replace("one-line goal.", "TAMPERED");
+        assert!(!is_synced(&s, &edited)); // hand edit detected
     }
 }

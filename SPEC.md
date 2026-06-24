@@ -55,6 +55,7 @@ North star: ⊥ just fewer tokens — move work DOWN the model-size ladder w/o q
 - cmd: `kittenscrew plan path [<goal>]` → JSON {path[], length} critical/longest prereq chain
 - cmd: `kittenscrew plan alternatives` → JSON [{id, task, scope, unblocks, blocks}] frontier choices
 - cmd: `kittenscrew hook <event>` → runs hook logic for SessionStart|PreToolUse|PostToolUse|PreCompact
+- cmd: `kittenscrew score` → JSON graded conformance: {overall, dims:[{name, pct, detail}]} (interface-completeness, check-done-pass, dep-coverage, value-coverage, sync) — convergence metric, ⊥ binary
 - cmd: `kittenscrew config show` → resolved `kittenscrew.toml` (defaults if absent) → JSON
 - cmd: `kittenscrew init` → writes `kittenscrew.toml` template, registers hooks in `~/.claude/settings.json`
 - file: `kittenscrew.toml` schema → `[kitty] compression_level`, `[hooks] pre, post, session, compact`, `[docs] auto_generate, detail (terse|normal|explain), target (dev|idiot)`, `[plan] strict_ordering`, `[guard] blocked_cmds=[…]`
@@ -92,6 +93,8 @@ V26: deliberation = composable pipe of fixed-size primitives {`brainstorm`,`rese
 V27: deliberation ! terminates in `ask` = user-choice decision packet {agreed, options[{proposal,cost,risk}], recommend} → ⊥ auto-apply. Rust = orchestrate/bound/scribe/present, LLM kitties = judgement (debate/attack/defend); roster+chair per config
 V28: ∀ §I-declared `cmd:` ! resolve to a real binary subcommand (interface-completeness gate) → deterministic test asserts §I cmds ⊆ clap subcommand tree; built-but-undeclared also flagged. catches §I↔code drift that `check`/`drift` can't (they watch store↔SPEC.md, ⊥ §I↔binary). Lesson forged: silent interface debt → hard floor
 V29: remote review = OPTIONAL advisory primitive (config roster of remote agents via OpenRouter: {key, model, role-desc}) → gets diff + ONLY the relevant spec fragment (⊥ whole spec) → returns few-sentence notes/suggestions → ⊥ blocks, ⊥ auto-applies; feeds deliberation (eval|brainstorm|ask). 0-runtime-dep (§C) → shell to `curl`, ⊥ link HTTP crate. absent config → silently skipped
+V30: render-triggering cmd (`spec apply`/`plan done`/`check done` demote) ! verify SPEC.md ≡ store projection FIRST (`is_synced`) → diverges (manual prose edit pending) → abort exit 2 + suggest `spec drift --apply`, ⊥ silently clobber the edit
+V31: conformance = GRADED %, ⊥ binary pass/fail. score dims (§I-completeness, `check done` pass-rate, dep-coverage, sync, invariant-test coverage) → 0-100% each + aggregate. weird spec≠code case → lock w/ specific + generic unit test AND it dents the % until fixed → track convergence over commits, ⊥ expect all-at-once
 
 ## §T TASKS
 
@@ -142,7 +145,8 @@ T43|.|deliberation pipeline engine: primitives {brainstorm,research,evaluate,ask
 T44|.|`kittenscrew review` — assemble diff + ONLY relevant spec fragment + role prompt → call config'd remote agent(s) (OpenRouter via curl, 0-dep) → collect few-sentence notes/suggestions → feed deliberation (eval\|brainstorm\|ask). optional, advisory, absent-config=skip|T41|V26,V27,V29
 T45|.|interface-completeness gate: test §I declared cmds ⊆ binary clap subcommand tree (forge §I↔code drift lesson into deterministic floor)|-|V28
 T46|.|persist toml-only fields (value/difficulty/risk/priority/scope/eval) across SPEC.md round-trip — decide: commit store \| render into SPEC.md \| sidecar. currently LOST on reimport (gitignored store + SPEC.md ⊥ carries them), silently|-|V9,V23
-T47|.|render-triggering cmds (spec apply, plan done, check done demote) detect SPEC.md drift vs store FIRST → abort + suggest `spec drift --apply` (prevent silent clobber of manual prose §G/§C/§I/§V edits). Discovered live: hand-edit §I then apply rendered stale store, dropped the edit|T29|V9,V16
+T47|x|render-triggering cmds (spec apply, plan done, check done demote) detect SPEC.md drift vs store FIRST → abort + suggest `spec drift --apply` (prevent silent clobber of manual prose §G/§C/§I/§V edits). Discovered live: hand-edit §I then apply rendered stale store, dropped the edit|T29|V9,V16
+T48|x|`kittenscrew score` — GRADED conformance % (V31): dims §I-completeness, check-done pass-rate, dep-coverage, sync, invariant-test-coverage → 0-100 each + aggregate. deterministic. track convergence per commit, ⊥ binary|T45|V31
 
 ## §B BUGS
 
