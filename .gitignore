@@ -14,3 +14,9 @@ benchmarks/agency/judge-bundles/
 benchmarks/agency/**/target/
 __pycache__/
 benchmarks/agency/_oracle_*.json
+
+# kittenscrew
+kittenscrew/target/
+# .kittenscrew/spec.toml = authoritative store (V9) → committed (T46).
+# Only ephemeral checkpoints are ignored.
+.kittenscrew/*.json

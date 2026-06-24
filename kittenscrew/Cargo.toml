@@ -1,0 +1,23 @@
+[package]
+name = "kittenscrew"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Spec-driven build pipeline — Rust core for the kitten plugin"
+
+# Self-contained workspace root (agents-config repo is not a Rust project).
+[workspace]
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+toml = "0.8"
+regex = "1"
+glob = "0.3"
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
