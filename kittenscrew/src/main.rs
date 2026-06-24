@@ -916,7 +916,9 @@ mod squeez {
             "session-start" => hooks.join("session-start.sh"),
             "pre-tool" => hooks.join("pretooluse.sh"),
             "post-tool" => hooks.join("posttooluse.sh"),
+            "subagent-stop" => hooks.join("subagentstop.sh"),
             "pre-compact" => hooks.join("precompact.sh"),
+            "post-compact" => hooks.join("postcompact.sh"),
             _ => return Ok(None),
         };
         if !script.is_file() {
@@ -948,11 +950,38 @@ mod hook {
             "pre-tool" => pre_tool(&stdin),
             "post-tool" => post_tool(&stdin),
             "stop" => stop(&stdin),
+            "subagent-stop" => subagent_stop(&stdin),
             "pre-compact" => pre_compact(&stdin),
+            "post-compact" => post_compact(&stdin),
             other => Err(KittenError::Validation(format!(
                 "unknown hook event: {other}"
             ))),
         }
+    }
+
+    /// T53: SubagentStop — a subagent finished. The membrane covers it so squeez
+    /// can fold the subagent's output (V33: nothing bypasses); kittenscrew adds no
+    /// driving here (the parent turn's Stop hook decides). Graceful: no squeez
+    /// script → no-op.
+    fn subagent_stop(stdin: &str) -> Result<(), KittenError> {
+        if let Some(out) = squeez::run_hook("subagent-stop", stdin)? {
+            if !out.trim().is_empty() {
+                print!("{out}");
+            }
+        }
+        Ok(())
+    }
+
+    /// T53: PostCompact — after a context compaction. Delegate to squeez's
+    /// postcompact hook (session-state restore) so the membrane owns this event
+    /// too (V33). Graceful: missing script → no-op.
+    fn post_compact(stdin: &str) -> Result<(), KittenError> {
+        if let Some(out) = squeez::run_hook("post-compact", stdin)? {
+            if !out.trim().is_empty() {
+                print!("{out}");
+            }
+        }
+        Ok(())
     }
 
     /// T51: UserPromptSubmit intake (V35, V33). Classify the prompt, inject ONLY

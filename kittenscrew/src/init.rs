@@ -27,7 +27,9 @@ pub const MEMBRANE: &[(&str, &str, &str)] = &[
     ("PreToolUse", "pre-tool", ""),
     ("PostToolUse", "post-tool", ""),
     ("Stop", "stop", ""),
+    ("SubagentStop", "subagent-stop", ""),
     ("PreCompact", "pre-compact", ""),
+    ("PostCompact", "post-compact", ""),
 ];
 
 const CONFIG_FILE: &str = "kittenscrew.toml";
@@ -215,6 +217,26 @@ mod tests {
         // can't drift from the schema.
         let parsed = crate::config::parse(&config_template()).unwrap();
         assert_eq!(parsed, Config::default());
+    }
+
+    #[test]
+    fn membrane_covers_every_v33_event() {
+        // V33: the control plane intercepts ALL Claude Code events. If CC adds an
+        // event we must extend MEMBRANE + its dispatch arm — this guards that.
+        let events: Vec<&str> = MEMBRANE.iter().map(|(e, _, _)| *e).collect();
+        for e in [
+            "SessionStart",
+            "UserPromptSubmit",
+            "PreToolUse",
+            "PostToolUse",
+            "Stop",
+            "SubagentStop",
+            "PreCompact",
+            "PostCompact",
+        ] {
+            assert!(events.contains(&e), "membrane missing {e}");
+        }
+        assert_eq!(MEMBRANE.len(), 8, "exactly the 8 V33 events");
     }
 
     #[test]

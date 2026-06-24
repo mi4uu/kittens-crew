@@ -58,7 +58,7 @@ North star: ⊥ just fewer tokens — move work DOWN the model-size ladder w/o q
 - cmd: `kittenscrew plan impact <id>` → JSON {scope, unblocks[], blocks[]}
 - cmd: `kittenscrew plan path [<goal>]` → JSON {path[], length} critical/longest prereq chain
 - cmd: `kittenscrew plan alternatives` → JSON [{id, task, scope, unblocks, blocks}] frontier choices
-- cmd: `kittenscrew hook <event>` → runs hook logic for SessionStart|UserPromptSubmit|PreToolUse|PostToolUse|Stop|PreCompact; `user-prompt` classifies the prompt (maps-§T|clear|ambiguous) + injects targeted context (plan next + referenced task) as `additionalContext` (V33,V35); `stop` = autonomous driver (default OFF): check-done demote → audit variance → drive-on (block-stop+inject) | empty→halt | flagged→escalate, hard-bounded by `[driver] max_iters` (V34,V27)
+- cmd: `kittenscrew hook <event>` → runs hook logic for ALL 8 CC events SessionStart|UserPromptSubmit|PreToolUse|PostToolUse|Stop|SubagentStop|PreCompact|PostCompact — single entry, nothing bypasses (V33); `user-prompt` classifies the prompt (maps-§T|clear|ambiguous) + injects targeted context (plan next + referenced task) as `additionalContext` (V33,V35); `stop` = autonomous driver (default OFF): check-done demote → audit variance → drive-on (block-stop+inject) | empty→halt | flagged→escalate, hard-bounded by `[driver] max_iters` (V34,V27)
 - cmd: `kittenscrew score` → JSON graded conformance: {overall, dims:[{name, pct, detail}]} (interface-completeness, check-done-pass, dep-coverage, value-coverage, sync) — convergence metric, ⊥ binary
 - cmd: `kittenscrew config show` → resolved `kittenscrew.toml` (defaults if absent) → JSON
 - cmd: `kittenscrew init` → writes `kittenscrew.toml` template, registers hooks in `~/.claude/settings.json`
@@ -160,7 +160,7 @@ T49|x|`[compression]` config: per content-class level (prose\|dump\|structured\|
 T50|.|compression measurement harness: labeled corpus × squeez levels → per-class {tokens_saved, fidelity (lossless on numbers/paths/errors/JSON), net = saved − P(loss)·rerun_cost} → recommended policy. deterministic, graded like score|T48,T49|V32
 T51|x|`UserPromptSubmit` hook → `kittenscrew hook user-prompt`: classify command {clear\|ambiguous\|maps-§T}, inject ONLY targeted context (spec read relevant + plan next), ⊥ front-load. ambiguous → agent clarifies before acting|T16|V35,V33
 T52|x|`Stop` hook = autonomous driver → `kittenscrew hook stop`: turn-end → check done on touched scope → plan done\|demote, audit cadence (variance/drift every N), decide next→inject+block-stop \| empty→summarize \| ambiguous/flagged→escalate to user. bounded auto-iters, ⊥ runaway|T16,T42,T51|V34,V33,V27
-T53|.|hook dispatch covers ALL CC events (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, Pre/PostCompact) → single kittenscrew entry = the membrane; nothing bypasses (V33). wire via init (T16)|T16|V33
+T53|x|hook dispatch covers ALL CC events (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, Pre/PostCompact) → single kittenscrew entry = the membrane; nothing bypasses (V33). wire via init (T16)|T16|V33
 
 ## §B BUGS
 
