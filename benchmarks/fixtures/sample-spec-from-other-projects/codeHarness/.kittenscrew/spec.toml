@@ -1,0 +1,196 @@
+schema = 1
+goal = "Rust CLI. Fast spin-up disposable encrypted Linux desktop VM in window. No data leak. Instant nuke."
+constraints = [
+    "Rust CLI. macOS Apple Silicon primary, Linux bonus.",
+    "Backend QEMU only. mac=HVF, linux=KVM. Child proc + QMP. No hypervisor bindings.",
+    "Security top priority.",
+    "All artifacts confined to user VM dir.",
+    "Secrets never on argv.",
+    "Guest: Debian + latest KDE + VS Code, package list = config.",
+]
+interfaces = [
+    "CLI cmds: `create` `start` `stop` `nuke` `list` `config` `image build`",
+    "config file: `~/.config/codeharness/<vm>.toml`",
+    "redirect rules file: `redirect.toml` (hot-reload)",
+    "QMP unix socket (internal control)",
+    "image inputs: `images/packages.base.toml` + config `[packages].extra`",
+]
+bug = []
+
+[[invariant]]
+id = "V1"
+text = "disk = raw LUKS (aes-256-xts, sha256, high iter-time) over a sparse payload file; LUKS header DETACHED in a separate small file. (Empirical: qcow2 embeds its LUKS header so can't detach; raw-luks chosen for crypto-erase. Sparse via filesystem. qcow2-in-luks/backing-from-golden deferred to T7 if copy cost hurts.)"
+
+[[invariant]]
+id = "V2"
+text = "nuke = shred detached header then rm qcow2; after nuke disk unopenable even w/ correct key."
+
+[[invariant]]
+id = "V3"
+text = "key source per-VM ∈ {passphrase, keyfile}; secrets never in argv/logs; zeroized in mem."
+
+[[invariant]]
+id = "V4"
+text = "net mode ∈ {none, open, allow, redirect}; none = `restrict=on`, zero host+internet reach from guest. First boot (cloud-init provisioning, before `.provisioned` marker) forces full `open` net regardless of mode; configured mode applies on every boot after."
+
+[[invariant]]
+id = "V5"
+text = "redirect = no-MITM L4; route by DNS+SNI, byte-splice to target (e.g. binance.com→host:8080); no TLS decrypt, no CA in guest."
+
+[[invariant]]
+id = "V6"
+text = "redirect gateway fail-closed: unknown/unparseable/ECH traffic dropped, never leak to internet."
+
+[[invariant]]
+id = "V7"
+text = "redirect rules hot-reload w/o VM restart; in-flight conns keep old rules, new conns use new."
+
+[[invariant]]
+id = "V8"
+text = "isolation default-off: no 9p/virtfs, no clipboard unless config opt-in."
+
+[[invariant]]
+id = "V9"
+text = "all artifacts (qcow2, header, sockets, logs) live under VM dir; nothing written outside."
+
+[[invariant]]
+id = "V10"
+text = "GUI window: virtio-gpu + `cocoa`(mac)/`gtk`(linux). GL accel (`gl=es`/`on` + virtio-gpu-gl) only when qemu built with OpenGL AND config [display].gl=true; default gl=off + virtio-gpu-pci (software framebuffer) since stock brew qemu lacks OpenGL."
+
+[[invariant]]
+id = "V11"
+text = "config validated at load; invalid rejected w/ clear error before any QEMU spawn."
+
+[[invariant]]
+id = "V12"
+text = "runtime deps (qemu-img, qemu-system-<arch>; passt optional) detected before any VM op; never spawn with required deps missing; `doctor --install` installs via host pkg mgr (brew/apt/dnf/pacman) only on explicit user consent."
+
+[[task]]
+id = "T1"
+status = "done"
+task = "scaffold workspace + cli + config schema/validate"
+deps = []
+priority = 0
+cites = ["V11"]
+scope = []
+note = ""
+
+[[task]]
+id = "T2"
+status = "done"
+task = "encrypted disk create, detached LUKS header, key sources (boot→T4)"
+deps = []
+priority = 0
+cites = [
+    "V1",
+    "V3",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T3"
+status = "done"
+task = "nuke crypto-erase (shred header + rm)"
+deps = []
+priority = 0
+cites = ["V2"]
+scope = []
+note = ""
+
+[[task]]
+id = "T4"
+status = "done"
+task = "qemu process mgmt + QMP client + GUI display per-OS (GL window validated at T7)"
+deps = []
+priority = 0
+cites = ["V10"]
+scope = []
+note = ""
+
+[[task]]
+id = "T5"
+status = "done"
+task = "net none/open (slirp; passt deferred to linux/T8)"
+deps = []
+priority = 0
+cites = ["V4"]
+scope = []
+note = ""
+
+[[task]]
+id = "T6"
+status = "done"
+task = "net allow host:port allowlist — FOLDED into T8 (host proxy ruleset: permit listed host:port, drop rest)"
+deps = []
+priority = 0
+cites = ["V4"]
+scope = []
+note = ""
+
+[[task]]
+id = "T7"
+status = "done"
+task = "debian cloud image -> encrypted disk + cloud-init seed (KDE+vscode+pkg list); GUI first-boot = interactive"
+deps = []
+priority = 0
+cites = [
+    "V11",
+    "I.images",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T8"
+status = "done"
+task = "egress proxy (slirp restrict+guestfwd -> host HTTP/CONNECT proxy; route by hostname; allow/redirect/open/none; hot-reload rules; redirect=L4 splice no-MITM). NOTE: slirp blocks transparent gateway; proxy-respecting egress only, rest fail-closed"
+deps = []
+priority = 0
+cites = [
+    "V5",
+    "V6",
+    "V7",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T9"
+status = "todo"
+task = "isolation hardening + secret/log/artifact audit"
+deps = []
+priority = 0
+cites = [
+    "V8",
+    "V9",
+    "V3",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T10"
+status = "todo"
+task = "tests: crypto round-trip, nuke unrecoverable, 4 net modes, gateway fail-closed"
+deps = []
+priority = 0
+cites = [
+    "V1",
+    "V2",
+    "V4",
+    "V5",
+    "V6",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T11"
+status = "done"
+task = "dependency preflight + doctor install (qemu/passt, brew/apt/dnf/pacman)"
+deps = []
+priority = 0
+cites = ["V12"]
+scope = []
+note = ""

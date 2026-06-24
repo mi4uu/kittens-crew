@@ -1,0 +1,657 @@
+schema = 1
+goal = "KeyMarley key server + Binance tunnel always-on as service on vps box; Botmarley main instance always-on @ `https://botmarley.example.com`; every instance verifies license vs keymarley over HTTPS."
+constraints = [
+    "Rust. reuse crates: `keymarley`, `core`, `server`, `shared`. ⊥ rewrite.",
+    "single-tenant, no backward-compat burden. real bug → fix in plan (§T), ⊥ legacy support.",
+    "key project. progress & info tracked in brain.md `work/BotMarley.md` → keep updated on milestones.",
+    "KeyMarley = Axum + SQLite + Ed25519. relocate bob → vps.",
+    "license verify = Ed25519 pubkey `PUBLIC_KEY_BYTES` in `crates/shared/src/crypto.rs`. pubkey verbatim. signing key offline only.",
+    "Binance tunnel built: `SshTunnelManager` in `crates/core/src/ssh_tunnel.rs`, SOCKS5. ⊥ rebuild.",
+    "front both svcs via Cloudflare Tunnel (cloudflared ingress). public host → local port:",
+    "`keymarley.example.com` → `http://localhost:8000`  (keymarley, already routing)",
+    "`botmarley.example.com` → `http://localhost:5000`  (main instance)",
+    "vps host: `root@vps01.example-host.net -p 2222`.",
+    "both svcs always-on → survive reboot & crash (systemd | vps equivalent).",
+    "endpoints config-driven (fronted by cloudflared) → host swap ⊥ recompile.",
+    "project repo: `https://github.com/example-org/botmarley`",
+    "docs = separate repo `https://github.com/example-org/botmarley-book`, end-user focused, GitHub Pages book → `https://example-org.github.io/botmarley-book/`. ⊥ in this repo. ! always current.",
+    "trading modes: backtest, paper, live. shared eval core ! identical: `evaluation.rs`, `portfolio.rs`, `executor.rs`, `indicators.rs` (all `crates/core/src/backtest/`).",
+    "exchanges: Binance + Kraken both real exec. `AccountType` enum {Paper,Kraken,Binance} dispatch. strat logic exchange-agnostic.",
+    "strat model today = single-pair trigger (`indicator`/`operator`/`target`/`timeframe`, `max_open_positions`). ⊥ cross-asset rotation.",
+    "both hosts run cloudflared; ingress per supplied config (host→domain→port). host ? resolved.",
+    "demo instance: independent & separate, host `ssh server`, cloudflared → `botmarley-demo.example.com`. public, always-available ∀ (anon, no license gate). own db/state. paper-only ? TBD.",
+    "NEW capability: GEM / dual-momentum (portfolio rotation across asset universe). currently ⊥ supported, ! add.",
+]
+interfaces = [
+    "svc: botmarley main → `https://botmarley.example.com` (cloudflared → localhost:5000)",
+    "svc: keymarley → `https://keymarley.example.com` (cloudflared → localhost:8000), always-on",
+    "svc: botmarley-demo → `https://botmarley-demo.example.com` (host `ssh server`, cloudflared), independent instance",
+    "api: client verify → POST keymarley `{date, api_key_hash}` → signed resp `{signature_b64}`",
+    "tunnel: SOCKS5 SSH → `root@vps01.example-host.net:2222` → Binance API (built)",
+    "key: Ed25519 pubkey `PUBLIC_KEY_BYTES`, `crates/shared/src/crypto.rs`",
+    "client: `crates/server/src/license.rs` → verify + local cache + grace period",
+    "docs: book repo `github.com/example-org/botmarley-book` → published `https://example-org.github.io/botmarley-book/` (GitHub Pages) → end-user",
+    "mode: backtest | paper | live → ! same results ∀ {same candles, strat, cfg}",
+    "exchange: Binance | Kraken → same eval & same results",
+    "parity test: `crates/core/tests/parity_evaluation.rs`",
+    "engines: backtest `crates/core/src/backtest/engine.rs`, live `crates/core/src/trading/engine.rs`",
+    "strat types: per-pair trigger (built) + rotation/dual-momentum (NEW, GEM)",
+    "GEM: asset universe + ROC lookback relative rank → hold winner; absolute gate vs cash/stable; monthly rebalance (configurable)",
+]
+
+[[invariant]]
+id = "V1"
+text = "∀ Botmarley instance → license verify vs keymarley before access (gate mw)"
+
+[[invariant]]
+id = "V2"
+text = "keymarley reachable over public HTTPS (cloudflared) ∴ verify ⊥ depend on SSH tunnel up"
+
+[[invariant]]
+id = "V3"
+text = "license resp Ed25519-signed → client verify vs `PUBLIC_KEY_BYTES` ! pass"
+
+[[invariant]]
+id = "V4"
+text = "keymarley svc & binance tunnel ! auto-restart on crash & reboot"
+
+[[invariant]]
+id = "V5"
+text = "Ed25519 signing key ⊥ on any deployed host (offline gen only)"
+
+[[invariant]]
+id = "V6"
+text = "cached license + grace → instance survives transient keymarley outage"
+
+[[invariant]]
+id = "V7"
+text = "Binance key requests ! route via SSH tunnel to vps (IP stability)"
+
+[[invariant]]
+id = "V8"
+text = "keymarley url & tunnel target ! config-driven (⊥ hardcode) → host swap behind cloudflared ⊥ recompile"
+
+[[invariant]]
+id = "V9"
+text = "∀ shipped feature | infra change → docs repo updated same change ∴ docs ! always current"
+
+[[invariant]]
+id = "V10"
+text = "backtest = paper = live → identical results ∀ {same candles, strat, cfg}"
+
+[[invariant]]
+id = "V11"
+text = "exchange-agnostic → Binance | Kraken same eval & same results (exec decoupled from strat)"
+
+[[invariant]]
+id = "V12"
+text = "portfolio state {balance, positions, PnL, fees} tracked accurate ∀ mode & exchange"
+
+[[invariant]]
+id = "V13"
+text = "divergences D1-D6 closed | explicit cfg (fee, slippage, cross-pair, LOT_SIZE)"
+
+[[invariant]]
+id = "V14"
+text = "rotation strat → ∀ rebalance pick max relative momentum (ROC lookback) over universe"
+
+[[invariant]]
+id = "V15"
+text = "absolute gate → winner momentum ≤ risk-free|0 → hold cash/stable (⊥ forced into market)"
+
+[[invariant]]
+id = "V16"
+text = "rebalance cadence configurable (default monthly), low turnover; GEM result obeys V10 (backtest=paper=live)"
+
+[[invariant]]
+id = "V17"
+text = "demo instance independent → own state/db, ⊥ shares data with prod, always-on on `ssh server`"
+
+[[invariant]]
+id = "V18"
+text = "demo public reachable ∀ (anon, no auth/license) → uptime check ! green; documented in book"
+
+[[invariant]]
+id = "V19"
+text = "demo mode → ⊥ accept real exchange api_key/api_secret; attempt → ⊥ save + UI demo notice"
+
+[[invariant]]
+id = "V20"
+text = "demo mode → ∀ settings writes (settings save, password set/remove) blocked; page visible read-only + notice"
+
+[[invariant]]
+id = "V21"
+text = "backtest ⊥ look-ahead → indicator/value at tick T uses only data closed ≤ T (multi-TF = last closed bar). [fixed: expand_to_1m_ticks]"
+
+[[invariant]]
+id = "V22"
+text = "backtest fills ≡ live fills → same price (next-candle open, ⊥ signal-close), same fee base, same LOT_SIZE/step_size/min_qty/min_notional rounding+rejection, same quote→USD for cross-pair. backtest ⊥ more favourable than live."
+
+[[invariant]]
+id = "V23"
+text = "metrics honest → ⊥ result < -100% for spot long-only; grade on REALISED (⊥ mark-to-market paper); benchmark pays same fees; displayed equity = engine's actual equity. ⊥ clairvoyant/paper metric shown as real."
+
+[[invariant]]
+id = "V24"
+text = "trigger threshold may be ATR-scaled → value `±k*atr[_period]` (sign=direction, period default 14, tf from trigger's timeframe). resolved ONCE at position entry: threshold% = k · ATR(closed bars ≤ entry tick) / entry_price · 100, then FROZEN for position life (⊥ recompute per tick → stable target). warmup (< period closed bars) → trigger inert (⊥ fire). reference point unchanged (pos_price_change from entry/avg, follow from peak/trough; ATR sets magnitude only). obeys V21 (⊥ look-ahead) + V22 (backtest ≡ live). fixed `%` triggers unchanged (full back-compat). edge claim valid only if ONE shared multiplier holds positive out-of-sample across ≥4 pairs (walk-forward) — else ATR = relocated overfit, reject. OPT-IN `_live` token (e.g. `-3*atr_1h_live`) → recompute ATR at CURRENT tick even on a position trigger (DCA/TP adapt to current pace) instead of entry-freeze; default = frozen."
+
+[[invariant]]
+id = "V25"
+text = "portfolio multi-pair mode (shared pool) — opt-in (≠ isolated equal-weight run_multipair, which stays). ONE shared cash + ONE positions list, each position pair-tagged. all universe pairs evaluated on a unified 1m timeline; a pair is evaluated only on ticks where it HAS a candle (own IndicatorCache, no look-ahead V21). opens draw from the SHARED cash, sized by the action's `amount` exactly as single-pair (`20 USDC` or `% of shared cash`). `max_open_positions` caps TOTAL open positions across ALL pairs; optional `max_per_pair` caps per pair. contention = first-come: at a tick, pairs processed in universe order; the first to claim the last free slot/cash wins → deterministic (V22). DCA/sell/follow triggers act ONLY on that pair's own positions; fills at that pair's next open. obeys V21 + V22 + V10. universe of 1 ≡ single-pair engine (parity)."
+
+[[invariant]]
+id = "V27"
+text = "multi-pair backtest metrics honest (V23 for universe runs) — a multi-pair run (`pair` = `A+B+C…`) MUST show a Buy&Hold benchmark + Max Drawdown + CAGR/Sharpe, not n/a / 0.00. B&H = EQUAL-WEIGHT hold of the universe: split initial capital 1/N across the N pairs at the window's first close, pay the same per-fill fee as the strategy, mark each pair at its own close, net a round-trip fee (fair alpha, V23). Equity curve reconstructed HONESTLY over a daily timeline from the stored actions: per-pair crypto = Σ signed `amount_crypto` (open/buy +, sell −) of that pair up to t; shared usd = latest action's `usd_balance` ≤ t; equity(t) = usd + Σ_pair crypto_pair·close_pair(t) (each pair at ITS OWN price — never one pair's price applied to all). terminal equity anchored to the engine's `final_balance_usd` (T54). MDD/CAGR/alpha/grade then come from this curve via `metrics::compute`. Retroactive: computed at render from stored actions + reloaded candles, no migration, works on existing runs. Single-pair path unchanged."
+
+[[invariant]]
+id = "V26"
+text = """preemptive eviction (shared-pool only, opt-in via `[eviction]`) — capital-velocity policy: a fresh open blocked ONLY by the GLOBAL `max_open_positions` may evict an existing open position to free its slot, so fast-cycling pairs aren't starved by long-held bags. Trigger point = a would-open (open_long triggers fire) rejected by the global cap; that blocked open IS the contention signal (no new TOML trigger). Eligibility: a victim must be held ≥ `min_hold` (duration). Victim choice = `policy`: `smallest_loss` (max mark-to-market P&L, min booked loss — WARN: keeps deep bags), `oldest` (min opened_at_tick), `worst_laggard` (most-underwater per day held = min unrealised%/hold_days). Victim may be ANY pair (shared pool); forced full-close fills at the VICTIM pair's next open with the same fee/rounding as a normal sell (V22), books REALISED P&L, emits a pair-tagged sell action (status_reason "evicted: slot contention"). Per-pair cap (`max_per_pair`) is NEVER preempted (eviction frees a global slot only; if the contender is at its own per-pair cap, no eviction). Default OFF → existing shared-pool behaviour unchanged. universe=1 has no contention → single-pair path byte-identical (parity V10/V22 holds). cash conserved (no money created); global cap still never exceeded post-eviction."""
+
+[[invariant]]
+id = "V28"
+text = "short-side OPTIONAL + opt-in per strat via `open_short` action. strat w/o any open_short ≡ pre-short engine byte-identical (parity V10). ⊥ global flag, ⊥ every strat shorts. long-only TOML unchanged (no `side` token)."
+
+[[invariant]]
+id = "V29"
+text = "NO LEVERAGE. gross exposure = Σ long cost-basis + Σ |short notional@entry| ! ≤ total_equity at open → else reject open (mirror existing `amount_usd > usd_balance` guard). short open notional X@P → usd_balance += X, crypto_balance −= X/P (negative bal = owed crypto). total_equity = usd + Σ crypto·price (negative crypto = liability) ∴ short P&L correct w/o new equity math. cash conserved (⊥ money created)."
+
+[[invariant]]
+id = "V30"
+text = "short exits DIRECTION-AWARE. for Short position: pos_price_change = (entry − price)/entry (positive when price FALLS = profit); trailing_stop trails the TROUGH (low since entry), fires when price rises k off trough; hard stop fires when price RISES vs entry; time_in_position unchanged; follow inverts peak/trough. close = buy-to-cover (full|%). Long positions ⊥ changed (byte-identical, V10)."
+
+[[invariant]]
+id = "V31"
+text = "⊥ SILENT LIVE SHORT. real exchange short needs margin/borrow (no leverage = cash-secured, still margin acct). until live short impl'd → strat w/ open_short runs backtest + paper ONLY; live attempt → refuse | paper-fallback + surfaced notice (like Kraken paper fallback). ⊥ silently place a spot order that cannot actually short."
+
+[[invariant]]
+id = "V32"
+text = "CROSS-ASSET ENTRY FILTER (optional, opt-in per strat via `[entry_filter]`). a strat WITHOUT the block ≡ pre-filter engine byte-identical (parity V10, gate = None). filter gates ONLY opens (`open_long`/`open_short`); DCA (`buy`)/`sell`/cover/follow/trailing/stop NEVER gated — once in a position, exits run unconditionally (don't trap capital behind a closed gate). gate from a REFERENCE pair's moving-average momentum: ma_type ∈ {ema (primary), hma}, span N, on the ref pair's `timeframe` (default 1m). condition ∈ {rising: MA(t)>MA(t−1) | velocity: MA(t)/MA(t−1)−1 ≥ threshold | price_above: ref_close(t)>MA(t)}. ⊥ LOOK-AHEAD (V21): gate at timeline tick t uses ONLY the ref bar fully CLOSED ≤ t (close_time = open_ts + tf_dur ≤ t) → ref MA aligned to timeline by TIMESTAMP (binary search), never by index (ref pair ≠ current pair, different 1m arrays/gaps). warmup (< span closed ref bars at t) → gate CLOSED (trend unconfirmed ⇒ no open); bounded by span only. BACKTEST = PAPER = LIVE (V10): same ref candles + MA + alignment ⇒ same gate. ref data MISSING (backtest: no ref Arrow; live: ingestion never broadcast ref) → SURFACE the error, ⊥ silently skip the gate (would over-trade) NOR silently idle. ref pair = current pair allowed (self-momentum filter)."
+
+[[invariant]]
+id = "V33"
+text = "ARROW 1m FILES SELF-HEALING + CONTIGUOUS (P0). backtest, paper bootstrap and live ALL read the SAME `{pair}/1m.arrow` → it MUST be gap-free, or the three modes silently diverge (V10) and indicators compute on holey data. An INTEGRITY GUARD scans every Arrow pair on disk for INTERNAL gaps (any interval > 2×1m → one missing candle tolerated, matches GapFiller), refetches the missing range (Binance primary, Kraken fallback) and MERGES it back to the Arrow file. Runs (a) at server startup (after a delay), (b) on a schedule, (c) after a history sync of a pair (so freshly-synced data is contiguous before any backtest reads it). TRAILING gap (last candle → now) is NOT a hole (just not-yet-fetched) → excluded from the contiguity verdict. A gap the exchange genuinely lacks (delist/downtime) is REPORTED (logged), not silently masked nor infinitely retried. ⊥ look-ahead: healing only inserts real historical candles at their true timestamps. The guard is idempotent — a clean file is a no-op."
+
+[[task]]
+id = "T1"
+status = "done"
+task = "provision vps `vps01.example-host.net:2222` always-on host"
+deps = []
+priority = 0
+cites = []
+scope = []
+note = ""
+
+[[task]]
+id = "T2"
+status = "done"
+task = "relocate keymarley svc bob → vps, persist & auto-restart"
+deps = []
+priority = 0
+cites = [
+    "V4",
+    "I.svc",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T3"
+status = "done"
+task = "expose keymarley via cloudflared `keymarley.example.com` → localhost:8000"
+deps = []
+priority = 0
+cites = [
+    "V2",
+    "I.svc",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T4"
+status = "done"
+task = "repoint `crates/server/src/license.rs` client → `https://keymarley.example.com`"
+deps = []
+priority = 0
+cites = [
+    "V1",
+    "V3",
+    "I.api",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T5"
+status = "done"
+task = "verify Binance SSH tunnel → vps 2222 live"
+deps = []
+priority = 0
+cites = [
+    "V7",
+    "I.tunnel",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T6"
+status = "done"
+task = "main instance always-on @ `https://botmarley.example.com` (cloudflared → localhost:5000)"
+deps = []
+priority = 0
+cites = [
+    "V4",
+    "I.svc",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T7"
+status = "done"
+task = "e2e: instance verify vs keymarley + grace fallback on outage"
+deps = []
+priority = 0
+cites = [
+    "V1",
+    "V6",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T8"
+status = "done"
+task = "make keymarley url & tunnel endpoint config-driven (no hardcode)"
+deps = []
+priority = 0
+cites = ["V8"]
+scope = []
+note = ""
+
+[[task]]
+id = "T9"
+status = "done"
+task = "wire docs publish: `botmarley-book` repo → GitHub Pages `example-org.github.io/botmarley-book/`"
+deps = []
+priority = 0
+cites = [
+    "V9",
+    "I.docs",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T10"
+status = "done"
+task = "doc infra in book: keymarley setup, cloudflared, tunnel, license, install"
+deps = []
+priority = 0
+cites = [
+    "V9",
+    "I.docs",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T11"
+status = "done"
+task = "audit: map done & verify works — backtest/paper/live × Binance/Kraken"
+deps = []
+priority = 0
+cites = [
+    "V10",
+    "V11",
+    "V12",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T12"
+status = "done"
+task = "fix D3 cross-pair (CRITICAL): quote-currency-aware pricing in backtest executor"
+deps = []
+priority = 0
+cites = [
+    "V10",
+    "V13",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T13"
+status = "done"
+task = "fix D1 fee (HIGH): per-trade fee deduct in backtest, cfg rate default 0.1% `engine.rs:213`"
+deps = []
+priority = 0
+cites = [
+    "V10",
+    "V13",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T14"
+status = "done"
+task = "fix D2 slippage cfg (bps) + D4 LOT_SIZE/step_size/min_qty cfg in backtest"
+deps = []
+priority = 0
+cites = [
+    "V10",
+    "V13",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T15"
+status = "done"
+task = "portfolio state correctness ∀ mode & exchange (balance, positions, PnL, fees)"
+deps = []
+priority = 0
+cites = ["V12"]
+scope = []
+note = ""
+
+[[task]]
+id = "T16"
+status = "done"
+task = "extend parity test `parity_evaluation.rs` → cover D1-D6 & Binance≡Kraken"
+deps = []
+priority = 0
+cites = [
+    "V10",
+    "V11",
+    "V13",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T17"
+status = "done"
+task = "design rotation/portfolio strat type (multi-asset universe) ≠ per-pair trigger"
+deps = []
+priority = 0
+cites = [
+    "V14",
+    "I.strat",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T18"
+status = "done"
+task = "impl relative momentum rank (ROC lookback) + absolute cash gate + cfg"
+deps = []
+priority = 0
+cites = [
+    "V14",
+    "V15",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T19"
+status = "done"
+task = "impl rebalance cadence (monthly/configurable) in backtest engine; live engine = follow-on"
+deps = []
+priority = 0
+cites = ["V16"]
+scope = []
+note = ""
+
+[[task]]
+id = "T20"
+status = "done"
+task = "GEM example strat toml + backtest validate (synthetic multi-asset; real crypto fixtures = follow-on)"
+deps = []
+priority = 0
+cites = [
+    "V14",
+    "V15",
+    "V16",
+    "V10",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T21"
+status = "done"
+task = "doc GEM/dual-momentum strat in book"
+deps = []
+priority = 0
+cites = [
+    "V9",
+    "I.docs",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T22"
+status = "done"
+task = "deploy independent demo instance on `ssh server` → `botmarley-demo.example.com`"
+deps = []
+priority = 0
+cites = [
+    "V17",
+    "I.svc",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T23"
+status = "done"
+task = "demo public, anon access (no license gate); doc in book + link from landing"
+deps = []
+priority = 0
+cites = [
+    "V18",
+    "I.docs",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T24"
+status = "done"
+task = "uptime check on demo (health endpoint + monitor) → verify always-available"
+deps = []
+priority = 0
+cites = ["V18"]
+scope = []
+note = ""
+
+[[task]]
+id = "T25"
+status = "done"
+task = "demo mode blocks real exchange keys (create/update account) + UI demo notice"
+deps = []
+priority = 0
+cites = [
+    "V19",
+    "V18",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T26"
+status = "done"
+task = "demo mode: all settings read-only (block save + password); UI notice; demo url in README"
+deps = []
+priority = 0
+cites = [
+    "V20",
+    "V18",
+    "I.docs",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T27"
+status = "done"
+task = "gem_backtest CLI: load arrow universe, align, run rotation, report CAGR/MDD/equity"
+deps = []
+priority = 0
+cites = [
+    "V14",
+    "V15",
+    "V16",
+    "V10",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T28"
+status = "done"
+task = "core rotation_service: run_rotation_report (load+align+run+metrics+benchmarks+equity ts)"
+deps = []
+priority = 0
+cites = [
+    "V14",
+    "V15",
+    "V16",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T29"
+status = "done"
+task = "server: /rotation list + POST /rotation/{id}/backtest (blocking run → render)"
+deps = []
+priority = 0
+cites = [
+    "V14",
+    "I.svc",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T30"
+status = "done"
+task = "UI: rotation list + results page (metrics + benchmark table + equity chart)"
+deps = []
+priority = 0
+cites = [
+    "V14",
+    "I.docs",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T31"
+status = "done"
+task = "built-in GEM strategies: multi-pair universes + varied windows (strats/builtin)"
+deps = []
+priority = 0
+cites = [
+    "V14",
+    "V16",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T32"
+status = "done"
+task = "backtest result: split realised vs unrealised PnL + buy&hold benchmark + alpha + open-pos warning"
+deps = []
+priority = 0
+cites = [
+    "V12",
+    "V10",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T33"
+status = "done"
+task = "backtest list: realised + unrealised columns, sortable (SQL LATERAL, no backfill)"
+deps = []
+priority = 0
+cites = [
+    "V12",
+    "V10",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T34"
+status = "done"
+task = "clear A–F strategy rating (beat buy&hold + realised) on list + detail; GEM data on demo"
+deps = []
+priority = 0
+cites = [
+    "V12",
+    "V10",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T35"
+status = "done"
+task = "rotation editor: create/edit GEM in UI; trigger editor redirects rotation (no [rotation] strip)"
+deps = []
+priority = 0
+cites = [
+    "V14",
+    "I.svc",
+]
+scope = []
+note = ""
+
+[[bug]]
+id = "B1"
+date = "2026-06-08"
+cause = "deploy copied only the server binary; runtime tree (templates/static/strats) loaded from WorkingDirectory via minijinja path_loader was never synced → prod/demo served Mar-23 templates, hiding GEM, realized columns, ratings, universe editor"
+fix = "bin/deploy_native.sh always rsyncs templates/static/public/strats into ~/Services/botmarley before restart; V-note: a deploy is incomplete unless the runtime tree is synced, not just the binary"
+
+[[bug]]
+id = "B2"
+date = "2026-06-11"
+cause = "live/paper sessions never traded (candles_processed=0 for ~19h): the engine waits on the DataIngestionService broadcast for its pair, but the pair was never registered for ingestion. `merge_active_sessions` (meant to register active-session pairs at boot) ALWAYS errored — it queried `config->>'pair'` (no such column; flat `pair` column) WHERE `status IN ('Running','Paused')` (status stored lower-case 'running'). Error swallowed (warn) → registry only had seeded BTC/ETH → engine starved on a different pair (ADA/USDC). Also no runtime registration: a session started after the service was live could never be fed."
+fix = "(1) fixed query → `SELECT DISTINCT pair FROM trading_sessions WHERE lower(status) IN ('running','paused')`. (2) DataIngestionService.registry now RwLock + `ensure_pair()`; task_executor calls it on session start so candles flow within one tick, no restart. V-note: starting a session MUST register its pair for live ingestion (boot-merge for recovered sessions + runtime ensure_pair for new ones)"
+
+[[bug]]
+id = "B5"
+date = "2026-06-15"
+cause = """SILENT no-op #2 (same session): paper sessions on `_USDC` / `_BNB` pairs (the whole All-Weather basket + drift ratios like XRP/BNB) routed live candle fetching to KRAKEN via `CandleFetcher::is_binance_pair`, which only inspected the BASE asset against a hardcoded list and ignored the QUOTE. Kraken has no USDC/BNB markets → self-fetch returned nothing → no live candle ever arrived → main loop never ran → candles_processed=0, UI "waiting for indicator data" forever. Note: the ingestion service WAS pulling XRP/USDC from Binance; only the engine's own fetcher was mis-routed."""
+fix = "`is_binance_pair` now routes by quote first: quote ∈ {USDC, BNB} ⇒ Binance (Kraken quotes USD/USDT/EUR/XBT), then the existing base-asset list. V-note: paper exchange routing must consider the quote, not just the base; a session that can't source candles must surface, not idle silently."
+
+[[bug]]
+id = "B6"
+date = "2026-06-16"
+cause = 'SILENT no-op (recurrence of B4 class): live/paper session `0393016a` (LINK_USDT, Avalanche, BB(30)@4h needs ~7440 1m candles) stuck on "waiting for indicator data" — `Failed to build indicator cache ... Bollinger Bands: need 30, have 6` every ~60s. TWO causes: (1) the re-bootstrap guard was `if buffer.len() < MIN_CANDLE_BUFFER` (500); a high-TF strat loads a buffer that clears 500 yet is far below its warm-up need (7440) → bootstrap skipped → BB/RSI never compute. (2) the RECOVERY spawn path never `ensure_pair(own_pair)` for ingestion (only the entry-filter ref), so a recovered session could fall to self-fetch and stall on a thin buffer.'
+fix = "(1) guard now `buffer.len() < strategy.warmup_1m_candles().clamp(MIN, MAX)` → bootstraps until the buffer can actually warm the indicators (or hits the cap). (2) recovery now `ensure_pair(&pair)` like task_executor. Verified live: 0393016a bootstrapped a 30-day buffer, 0 indicator failures after. V-note: the live bootstrap/re-bootstrap threshold MUST be the strategy's warm-up need, not a flat floor; every recovered session MUST register its own pair for ingestion."
+
+[[bug]]
+id = "B4"
+date = "2026-06-15"
+cause = 'SILENT no-op: a live/paper session on a high-timeframe long-lookback strategy (All-Weather = EMA-200 @4h, needs ~33 days warm-up) on a pair WITHOUT local Arrow history showed status "running" but candles_processed=0 forever — "waiting for indicator data". Cause: the bootstrap fetched a FIXED 30-day window with intervals capped at 1h, strategy-agnostic, so EMA-200@4h (needs >30 days of 4h bars) never had enough data. `exceeds_buffer_limit` even detected it but only WARNED. Worst kind of bug: pretends to work.'
+fix = "Bootstrap depth now DERIVED from `strategy.warmup_1m_candles()` (+50% margin, floor 30d); fetch a resolution ladder (1d/4h/1h/15m/5m/1m up to the strategy's `coarsest_timeframe_minutes()`, never coarser — aggregation can't split a coarse candle), each interval pulled from its own recent window so all reach now. V-note: live bootstrap MUST cover the strategy's actual indicator warm-up span, not a fixed window; a strategy that can't warm up must be surfaced, never silently idle. Refactored the 3 duplicated warm-up loops into `warmup_1m_candles()`."
+
+[[bug]]
+id = "B3"
+date = "2026-06-15"
+cause = """backtests of any shorting strategy (e.g. drift_ratio_meanrev) failed with a swallowed "db error". The §U6 short side added the `open_short` action type but the `backtest_actions.valid_action_type` CHECK still only allowed ('open_long','buy','sell'), so inserting an open_short action violated the constraint. Hidden because `format!("{}", tokio_postgres::Error)` prints just "db error" and drops the DbError source detail."""
+fix = "Widened the CHECK to include 'open_short' (schema.sql + idempotent DROP/ADD migration in create_schema for existing DBs); surfaced the PG error via `.source()` in the insert map_err. V-note: any new ActionType variant that can be persisted MUST be added to every action_type CHECK constraint (backtest_actions today). Verified: drift_ratio_meanrev XRP_BNB backtest now completes."

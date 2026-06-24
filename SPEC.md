@@ -122,7 +122,7 @@ T12|∅|impl `kittenscrew plan resolve` → parse §T table, build DAG, topo-sor
 T13|∅|impl `kittenscrew plan next` → filter `.` tasks w/ all deps `x`, return lowest id|-|§I   (superseded by T28 (plan next)
 T14|∅|impl `kittenscrew plan done <id>` → flip `.`→`x` in §T row, validate id exists|-|§I   (superseded by plan done cmd)
 T15|x|impl `kittenscrew.toml` parser + defaults (compression_level, hooks list, docs.auto_generate)|T1|§I
-T16|.|impl `kittenscrew init` → write `kittenscrew.toml` template + register hooks in `~/.claude/settings.json`|T15|V6
+T16|x|impl `kittenscrew init` → write `kittenscrew.toml` template + register hooks in `~/.claude/settings.json`|T15|V6
 T17|x|add `kittenscrew` to PATH in `claudeoneprovider.sh` & `claudeopenrouter.sh`|T1|§C
 T18|x|write `kittenscrew/tests/` integration tests (1 per §I command, assert exit codes per V1)|T28|V1
 T19|.|write README.md section: install, hook wiring, `kittenscrew.toml` schema, command reference|T16|§I

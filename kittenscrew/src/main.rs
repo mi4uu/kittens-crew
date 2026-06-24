@@ -11,6 +11,7 @@ mod check;
 mod config;
 mod docs;
 mod drift;
+mod init;
 mod plan;
 mod score;
 mod spec;
@@ -63,8 +64,19 @@ enum Cmd {
         #[command(subcommand)]
         action: DocsAction,
     },
-    /// Init: write kittenscrew.toml + register hooks (T16).
-    Init,
+    /// Init: write kittenscrew.toml + register the hook membrane (T16).
+    Init {
+        /// Dir holding `settings.json` (default: `$HOME/.claude`). Isolates the
+        /// write — pass a scratch dir for tests / Docker arms.
+        #[arg(long)]
+        target: Option<std::path::PathBuf>,
+        /// Report the plan without touching disk.
+        #[arg(long)]
+        dry_run: bool,
+        /// Overwrite an existing `kittenscrew.toml` (default: keep it).
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -189,7 +201,11 @@ fn run(cli: Cli) -> Result<(), KittenError> {
         Cmd::Config { action } => config_cmd(action),
         Cmd::Docs { action } => docs_cmd(action),
         Cmd::Hook { event } => hook::dispatch(&event),
-        Cmd::Init => init_stub(),
+        Cmd::Init {
+            target,
+            dry_run,
+            force,
+        } => init_cmd(target, dry_run, force),
     }
 }
 
@@ -656,17 +672,55 @@ fn config_cmd(action: ConfigAction) -> Result<(), KittenError> {
     }
 }
 
-fn init_stub() -> Result<(), KittenError> {
-    eprintln!("init: not implemented yet (T16 pending)");
+/// T16: write `kittenscrew.toml` + register the hook membrane. V6: the squeez
+/// gate is checked here (the binary lookup) and passed into `init::run`, which
+/// refuses without it (→ exit 3).
+fn init_cmd(
+    target: Option<std::path::PathBuf>,
+    dry_run: bool,
+    force: bool,
+) -> Result<(), KittenError> {
+    let target = target.unwrap_or_else(default_claude_dir);
+    let squeez_ok = squeez::bin().is_some();
+    let report = init::run(&target, squeez_ok, dry_run, force).map_err(|e| match e {
+        init::InitError::SqueezMissing => KittenError::SqueezMissing,
+        init::InitError::Io(io) => KittenError::Io(io),
+    })?;
+
+    let k = kitty::lookup("orchestrating").expect("orchestrating kitty");
+    let tag = if report.dry_run { "[dry-run] " } else { "" };
+    let cfg = match (report.dry_run, report.config_written) {
+        (true, true) => "would write",
+        (true, false) => "would keep",
+        (false, true) => "wrote",
+        (false, false) => "kept",
+    };
+    println!(
+        "{} [{}] {tag}{cfg} {} · {} membrane event(s) registered, {} already wired → {}",
+        k.emoji,
+        k.name,
+        report.config_path.display(),
+        report.registered.len(),
+        report.already.len(),
+        report.settings_path.display(),
+    );
     Ok(())
+}
+
+/// `$HOME/.claude` — where Claude Code reads `settings.json`. Falls back to a
+/// relative `.claude` if `$HOME` is unset (rare; keeps init total).
+fn default_claude_dir() -> std::path::PathBuf {
+    match std::env::var("HOME") {
+        Ok(h) => std::path::PathBuf::from(h).join(".claude"),
+        Err(_) => std::path::PathBuf::from(".claude"),
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
 enum KittenError {
     #[error("{0}")]
     Validation(String),
-    // kitten: constructed by T16 `init` (exit 3 when squeez unreachable, V6).
-    #[allow(dead_code)]
+    // V6: constructed by `init` when squeez is unreachable (→ exit 3).
     #[error("squeez binary not found in PATH or ~/.claude/squeez/bin/")]
     SqueezMissing,
     #[error("io: {0}")]

@@ -411,7 +411,7 @@ risk = 1
 
 [[task]]
 id = "T16"
-status = "todo"
+status = "done"
 task = "impl `kittenscrew init` → write `kittenscrew.toml` template + register hooks in `~/.claude/settings.json`"
 deps = ["T15"]
 priority = 0
