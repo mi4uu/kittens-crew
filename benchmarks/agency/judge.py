@@ -59,6 +59,10 @@ def evidence(arm_dir: Path) -> str:
     tel = arm_dir / "telemetry.json"
     if tel.exists():
         out.append("## OBJECTIVE TELEMETRY\n" + tel.read_text())
+        sc = json.loads(tel.read_text()).get("shortcuts", {})
+        if sc.get("count"):
+            lines = "\n".join(f"  {h['file']}:{h['line']} [{h['kind']}] {h['text']}" for h in sc["hits"][:40])
+            out.append(f"## FAKE-DELIVERY SCAN — {sc['count']} stubs/mocks/placeholders/TODO found (weigh against delivery & code_quality)\n" + lines)
     out.append("## DOCS\ncargo-doc generated: " + str((arm_dir / "cargo-doc").exists()) +
                " (judge docs_readiness from /// comments in SOURCE: are they intent+examples, or absent?)")
     return "\n\n".join(out)[:90000]

@@ -56,8 +56,8 @@ def main():
     hdr = "| arm | " + " | ".join(d.replace("_", " ") for d in DIMS) + " | **total** |"
     sep = "|" + "---|" * (len(DIMS) + 2)
     body = "\n".join("| " + a + " | " + " | ".join(str(m[d]) if m[d] is not None else "·" for d in DIMS) + f" | **{t}** |" for a, m, t, _ in rows)
-    tel_hdr = "| arm | build | tests | src_loc | cost $ | turns | doc-twist turns |"
-    tel_body = "\n".join(f"| {a} | {'✅' if tel.get('build_ok') else '❌'} | {tel.get('tests_pass')}/{tel.get('tests_pass',0)+tel.get('tests_fail',0)} | {tel.get('src_loc')} | {tel.get('cost_usd')} | {tel.get('turns')} | {tel.get('doc_twist',{}).get('turns_after','·')} |" for a, _, _, tel in rows)
+    tel_hdr = "| arm | build | tests | src_loc | stubs/fakes | cost $ | turns | doc-twist turns |"
+    tel_body = "\n".join(f"| {a} | {'✅' if tel.get('build_ok') else '❌'} | {tel.get('tests_pass')}/{tel.get('tests_pass',0)+tel.get('tests_fail',0)} | {tel.get('src_loc')} | {tel.get('shortcuts',{}).get('count','·')} | {tel.get('cost_usd')} | {tel.get('turns')} | {tel.get('doc_twist',{}).get('turns_after','·')} |" for a, _, _, tel in rows)
 
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     md = f"""# agency benchmark — {date}

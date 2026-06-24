@@ -37,6 +37,30 @@ WORKERS = int(os.environ.get("AGENCY_WORKERS", "1"))
 def norm(q: str) -> str:
     return re.sub(r"[^a-z0-9 ]", "", q.lower()).strip()
 
+SHORTCUT_PATTERNS = [
+    (r"\btodo!\s*\(", "todo!()"),
+    (r"\bunimplemented!\s*\(", "unimplemented!()"),
+    (r"\bunreachable!\s*\(", "unreachable!()"),
+    (r"//\s*(TODO|FIXME|HACK|XXX|STUB)\b", "TODO/FIXME/HACK comment"),
+    (r"panic!\s*\(\s*\"[^\"]*(not implemented|todo|unimplemented|placeholder)", "panic: not-implemented"),
+    (r"\b(placeholder|dummy data|mock(ed)?|stubbed?|not[ _-]?implemented|hard[ -]?cod|for now|temporar|FIXME)\b", "placeholder/mock/hardcode wording"),
+]
+def scan_shortcuts(proj: Path) -> dict:
+    """Hunt fake delivery: stubs, mocks, placeholders, hardcoded returns, TODO/FIXME.
+    Scans source (not tests). Returns {count, hits:[{file,line,text,kind}]}."""
+    hits = []
+    srcs = [p for p in proj.rglob("*.rs") if "target/" not in str(p) and "/tests/" not in str(p) and not p.name.endswith("test.rs")]
+    for p in srcs:
+        try:
+            for i, line in enumerate(p.read_text().splitlines(), 1):
+                for pat, kind in SHORTCUT_PATTERNS:
+                    if re.search(pat, line, re.I):
+                        hits.append({"file": str(p.relative_to(proj)), "line": i, "text": line.strip()[:160], "kind": kind})
+                        break
+        except Exception:
+            pass
+    return {"count": len(hits), "hits": hits}
+
 def resolve_skill(arm) -> str:
     txt = ""
     if arm.get("appendFile"):
@@ -191,6 +215,7 @@ def run_arm(arm, stamp):
     doc_dir = proj / "target" / "doc"
     if doc_dir.exists():
         shutil.copytree(doc_dir, RUNS / stamp / name / "cargo-doc", dirs_exist_ok=True)
+    telem["shortcuts"] = scan_shortcuts(proj)  # stubs/mocks/placeholders/TODO — fake-delivery detector
 
     out = RUNS / stamp / name
     (out / "transcript.jsonl").write_text("\n".join(json.dumps(x, ensure_ascii=False) for x in transcript))
@@ -200,6 +225,20 @@ def run_arm(arm, stamp):
     return telem
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--scan":
+        run = Path(sys.argv[2])
+        for arm_dir in sorted(p for p in run.iterdir() if p.is_dir()):
+            ws = arm_dir / "workspace"
+            cargos = sorted(ws.rglob("Cargo.toml"), key=lambda p: len(p.parts))
+            proj = cargos[0].parent if cargos else ws
+            sc = scan_shortcuts(proj)
+            tel_p = arm_dir / "telemetry.json"
+            tel = json.loads(tel_p.read_text()) if tel_p.exists() else {}
+            tel["shortcuts"] = sc; tel_p.write_text(json.dumps(tel, indent=2))
+            print(f"\n=== {arm_dir.name}: {sc['count']} shortcuts/stubs/placeholders ===")
+            for h in sc["hits"]:
+                print(f"  {h['file']}:{h['line']}  [{h['kind']}]  {h['text']}")
+        sys.exit(0)
     stamp = sys.argv[1] if len(sys.argv) > 1 else datetime.datetime.now().strftime("%Y%m%d-%H%M")
     print(f"agency run {stamp} — {len(arms)} arms, agent={AGENT_MODEL}, proxy={PROXY_MODEL}, workers={WORKERS}")
     print("you'll be asked to answer any NEW clarifying question (reused for all arms).\n")
