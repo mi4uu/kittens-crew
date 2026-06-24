@@ -277,7 +277,7 @@ fn box_chars(style: &str) -> (char, char, char, char, char, char) {
 pub fn boxed(k: &Kitty, message: &str, style: &str) -> String {
     let c = color(k.id);
     let (tl, tr, bl, br, h, v) = box_chars(style);
-    let label = format!("{} {} {}", emotion(message), k.emoji, k.name);
+    let label = format!("{} {} [{}]", emotion(message), k.emoji, k.name);
     let lines: Vec<&str> = if message.is_empty() {
         vec![""]
     } else {
