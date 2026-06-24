@@ -100,6 +100,9 @@ V29: remote review = OPTIONAL advisory primitive (config roster of remote agents
 V30: render-triggering cmd (`spec apply`/`plan done`/`check done` demote) ! verify SPEC.md ≡ store projection FIRST (`is_synced`) → diverges (manual prose edit pending) → abort exit 2 + suggest `spec drift --apply`, ⊥ silently clobber the edit
 V31: conformance = GRADED %, ⊥ binary pass/fail. score dims (§I-completeness, `check done` pass-rate, dep-coverage, sync, invariant-test coverage) → 0-100% each + aggregate. weird spec≠code case → lock w/ specific + generic unit test AND it dents the % until fixed → track convergence over commits, ⊥ expect all-at-once
 V32: compression level chosen per content-class by MEASURED net gain, ⊥ uniform ultra. `net = tokens_saved − P(fidelity_loss)·rerun_cost`. structured/actionable (JSON, build/test errors, diffs, paths, numbers) → lossless floor (savings small, loss forces re-run = net negative); prose/large-reads/dumps → aggressive (savings high, loss ≈ 0). measure on labeled corpus, ⊥ assume. NB: real token weight = front-loaded context (cached system prompt), ⊥ tool output — compress the right cost center
+V33: kittenscrew = CONTROL PLANE. ∀ Claude Code event (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, Pre/PostCompact) → routes through `kittenscrew hook <event>` → nothing in/out happens without passing the rules. hooks = the power (only layer that intercepts), engine = the brain, ⊥ advice-only
+V34: `Stop` hook = autonomous driver (plays the user): turn-end → `check done` on touched scope → `plan done` | demote, audit cadence (`check variance`/`drift` every N), then DECIDE: next task → inject "do X" + block-stop (drive on) | plan empty → summarize | ambiguous/flagged/plan-choice → ESCALATE to real user (the `ask` primitive, V27). bounded: hard cap on auto-iterations, ⊥ runaway
+V35: `UserPromptSubmit` hook = intake → classify command {clear | ambiguous | maps-to-§T}, inject ONLY targeted context (`spec read` relevant section + `plan next`), ⊥ front-load. ambiguous → signal agent to clarify before acting (⊥ guess)
 
 ## §T TASKS
 
@@ -154,6 +157,9 @@ T47|x|render-triggering cmds (spec apply, plan done, check done demote) detect S
 T48|x|`kittenscrew score` — GRADED conformance % (V31): dims §I-completeness, check-done pass-rate, dep-coverage, sync, invariant-test-coverage → 0-100 each + aggregate. deterministic. track convergence per commit, ⊥ binary|T28,T30|V31
 T49|.|`[compression]` config: per content-class level (prose\|dump\|structured\|diff → off\|full\|ultra). kittenscrew owns the POLICY, squeez does the work (wrap, ⊥ reimpl)|T15|V32,V10
 T50|.|compression measurement harness: labeled corpus × squeez levels → per-class {tokens_saved, fidelity (lossless on numbers/paths/errors/JSON), net = saved − P(loss)·rerun_cost} → recommended policy. deterministic, graded like score|T48,T49|V32
+T51|.|`UserPromptSubmit` hook → `kittenscrew hook user-prompt`: classify command {clear\|ambiguous\|maps-§T}, inject ONLY targeted context (spec read relevant + plan next), ⊥ front-load. ambiguous → agent clarifies before acting|T16|V35,V33
+T52|.|`Stop` hook = autonomous driver → `kittenscrew hook stop`: turn-end → check done on touched scope → plan done\|demote, audit cadence (variance/drift every N), decide next→inject+block-stop \| empty→summarize \| ambiguous/flagged→escalate to user. bounded auto-iters, ⊥ runaway|T16,T42,T51|V34,V33,V27
+T53|.|hook dispatch covers ALL CC events (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, Pre/PostCompact) → single kittenscrew entry = the membrane; nothing bypasses (V33). wire via init (T16)|T16|V33
 
 ## §B BUGS
 

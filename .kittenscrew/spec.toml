@@ -190,6 +190,18 @@ text = "conformance = GRADED %, ⊥ binary pass/fail. score dims (§I-completene
 id = "V32"
 text = "compression level chosen per content-class by MEASURED net gain, ⊥ uniform ultra. `net = tokens_saved − P(fidelity_loss)·rerun_cost`. structured/actionable (JSON, build/test errors, diffs, paths, numbers) → lossless floor (savings small, loss forces re-run = net negative); prose/large-reads/dumps → aggressive (savings high, loss ≈ 0). measure on labeled corpus, ⊥ assume. NB: real token weight = front-loaded context (cached system prompt), ⊥ tool output — compress the right cost center"
 
+[[invariant]]
+id = "V33"
+text = "kittenscrew = CONTROL PLANE. ∀ Claude Code event (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, Pre/PostCompact) → routes through `kittenscrew hook <event>` → nothing in/out happens without passing the rules. hooks = the power (only layer that intercepts), engine = the brain, ⊥ advice-only"
+
+[[invariant]]
+id = "V34"
+text = '`Stop` hook = autonomous driver (plays the user): turn-end → `check done` on touched scope → `plan done` | demote, audit cadence (`check variance`/`drift` every N), then DECIDE: next task → inject "do X" + block-stop (drive on) | plan empty → summarize | ambiguous/flagged/plan-choice → ESCALATE to real user (the `ask` primitive, V27). bounded: hard cap on auto-iterations, ⊥ runaway'
+
+[[invariant]]
+id = "V35"
+text = "`UserPromptSubmit` hook = intake → classify command {clear | ambiguous | maps-to-§T}, inject ONLY targeted context (`spec read` relevant section + `plan next`), ⊥ front-load. ambiguous → signal agent to clarify before acting (⊥ guess)"
+
 [[task]]
 id = "T1"
 status = "done"
@@ -944,6 +956,56 @@ note = ""
 value = 4
 difficulty = 4
 risk = 3
+
+[[task]]
+id = "T51"
+status = "todo"
+task = "`UserPromptSubmit` hook → `kittenscrew hook user-prompt`: classify command {clear|ambiguous|maps-§T}, inject ONLY targeted context (spec read relevant + plan next), ⊥ front-load. ambiguous → agent clarifies before acting"
+deps = ["T16"]
+priority = 0
+cites = [
+    "V35",
+    "V33",
+]
+scope = []
+note = ""
+value = 5
+difficulty = 4
+risk = 3
+
+[[task]]
+id = "T52"
+status = "todo"
+task = "`Stop` hook = autonomous driver → `kittenscrew hook stop`: turn-end → check done on touched scope → plan done|demote, audit cadence (variance/drift every N), decide next→inject+block-stop | empty→summarize | ambiguous/flagged→escalate to user. bounded auto-iters, ⊥ runaway"
+deps = [
+    "T16",
+    "T42",
+    "T51",
+]
+priority = 0
+cites = [
+    "V34",
+    "V33",
+    "V27",
+]
+scope = []
+note = ""
+value = 5
+difficulty = 5
+risk = 4
+
+[[task]]
+id = "T53"
+status = "todo"
+task = "hook dispatch covers ALL CC events (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, Pre/PostCompact) → single kittenscrew entry = the membrane; nothing bypasses (V33). wire via init (T16)"
+deps = ["T16"]
+priority = 0
+cites = ["V33"]
+scope = []
+note = ""
+value = 4
+difficulty = 3
+risk = 2
 
 [[bug]]
 id = "B1"
