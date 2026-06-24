@@ -1,13 +1,13 @@
 ---
 name: kittenscrew
 description: |
-  Use in any project that has a `.kittenscrew/spec.toml` store or a SPEC.md (the
-  kittens-crew control plane). Reach for it when deciding what to build next,
-  reading or changing the spec, marking a task done, or verifying delivery before
-  a commit. Triggers: "what's next", "plan", "add a task / invariant", "amend §V",
-  "mark T12 done", "check the spec", "score", "did I actually finish this". The
-  binary `kittenscrew` does the deterministic work — this skill only routes you to
-  the right verb; it is NOT an instruction dump.
+  Use when a project has a `.kittenscrew/spec.toml` store or a SPEC.md and you
+  need to pick the next task, read/change the spec, mark a task done, or verify
+  delivery before a commit. Trigger on "what's next", "plan the work", "add a
+  task/invariant", "amend §V", "mark T12 done", "read the spec", "check the
+  spec", "score conformance", "did I actually finish this". Routes to the
+  `kittenscrew` binary, which does the deterministic work. Do NOT use for casual
+  questions, ad-hoc edits to unrelated files, or repos with no kittenscrew store.
 ---
 
 # kittenscrew — control-plane router
