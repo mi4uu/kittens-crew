@@ -20,3 +20,7 @@ kittenscrew/target/
 # .kittenscrew/spec.toml = authoritative store (V9) → committed (T46).
 # Only ephemeral checkpoints are ignored.
 .kittenscrew/*.json
+
+# local provider scripts (contain API keys — never commit)
+claudeoneprovider.sh
+claudeopenrouter.sh

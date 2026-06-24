@@ -8,9 +8,13 @@ use std::io::{Read, Write};
 use std::process::{Command, ExitCode, Stdio};
 
 mod check;
+mod compression;
 mod config;
 mod docs;
 mod drift;
+mod driver;
+mod init;
+mod intake;
 mod plan;
 mod score;
 mod spec;
@@ -58,19 +62,46 @@ enum Cmd {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Compression policy (T49, V32): per content-class squeez level.
+    Compression {
+        #[command(subcommand)]
+        action: CompressionAction,
+    },
     /// Per-task docs (T23): `docs task <id>` → `docs/<id>-<slug>.md` (V12, opt-in).
     Docs {
         #[command(subcommand)]
         action: DocsAction,
     },
-    /// Init: write kittenscrew.toml + register hooks (T16).
-    Init,
+    /// Init: write kittenscrew.toml + register the hook membrane (T16).
+    Init {
+        /// Dir holding `settings.json` (default: `$HOME/.claude`). Isolates the
+        /// write — pass a scratch dir for tests / Docker arms.
+        #[arg(long)]
+        target: Option<std::path::PathBuf>,
+        /// Report the plan without touching disk.
+        #[arg(long)]
+        dry_run: bool,
+        /// Overwrite an existing `kittenscrew.toml` (default: keep it).
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
 enum ConfigAction {
     /// Resolve `kittenscrew.toml` (defaults if absent) → JSON.
     Show,
+}
+
+#[derive(Subcommand, Debug)]
+enum CompressionAction {
+    /// Print the full class→level policy as JSON.
+    Policy,
+    /// Print the squeez level for one content-class (exit 2 if unknown).
+    Level {
+        /// Content-class: prose | dump | structured | diff.
+        class: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -187,9 +218,14 @@ fn run(cli: Cli) -> Result<(), KittenError> {
         Cmd::Check { action } => check_cmd(action),
         Cmd::Score => score_cmd(),
         Cmd::Config { action } => config_cmd(action),
+        Cmd::Compression { action } => compression_cmd(action),
         Cmd::Docs { action } => docs_cmd(action),
         Cmd::Hook { event } => hook::dispatch(&event),
-        Cmd::Init => init_stub(),
+        Cmd::Init {
+            target,
+            dry_run,
+            force,
+        } => init_cmd(target, dry_run, force),
     }
 }
 
@@ -656,17 +692,79 @@ fn config_cmd(action: ConfigAction) -> Result<(), KittenError> {
     }
 }
 
-fn init_stub() -> Result<(), KittenError> {
-    eprintln!("init: not implemented yet (T16 pending)");
+/// T49: the compression POLICY (V32). Reads `[compression]` (defaults if absent)
+/// and reports the squeez level per content-class. Pure policy — no compression
+/// happens here (V10); squeez consumes the level.
+fn compression_cmd(action: CompressionAction) -> Result<(), KittenError> {
+    let cfg = config::load().map_err(KittenError::Validation)?.compression;
+    match action {
+        CompressionAction::Policy => {
+            let map: std::collections::BTreeMap<&str, &str> =
+                compression::policy(&cfg).into_iter().collect();
+            println!("{}", serde_json::to_string_pretty(&map).unwrap());
+            Ok(())
+        }
+        CompressionAction::Level { class } => {
+            let c = compression::Class::parse(&class).ok_or_else(|| {
+                KittenError::Validation(format!(
+                    "unknown content-class: {class} (expected prose|dump|structured|diff)"
+                ))
+            })?;
+            println!("{}", compression::level_for(&cfg, c));
+            Ok(())
+        }
+    }
+}
+
+/// T16: write `kittenscrew.toml` + register the hook membrane. V6: the squeez
+/// gate is checked here (the binary lookup) and passed into `init::run`, which
+/// refuses without it (→ exit 3).
+fn init_cmd(
+    target: Option<std::path::PathBuf>,
+    dry_run: bool,
+    force: bool,
+) -> Result<(), KittenError> {
+    let target = target.unwrap_or_else(default_claude_dir);
+    let squeez_ok = squeez::bin().is_some();
+    let report = init::run(&target, squeez_ok, dry_run, force).map_err(|e| match e {
+        init::InitError::SqueezMissing => KittenError::SqueezMissing,
+        init::InitError::Io(io) => KittenError::Io(io),
+    })?;
+
+    let k = kitty::lookup("orchestrating").expect("orchestrating kitty");
+    let tag = if report.dry_run { "[dry-run] " } else { "" };
+    let cfg = match (report.dry_run, report.config_written) {
+        (true, true) => "would write",
+        (true, false) => "would keep",
+        (false, true) => "wrote",
+        (false, false) => "kept",
+    };
+    println!(
+        "{} [{}] {tag}{cfg} {} · {} membrane event(s) registered, {} already wired → {}",
+        k.emoji,
+        k.name,
+        report.config_path.display(),
+        report.registered.len(),
+        report.already.len(),
+        report.settings_path.display(),
+    );
     Ok(())
+}
+
+/// `$HOME/.claude` — where Claude Code reads `settings.json`. Falls back to a
+/// relative `.claude` if `$HOME` is unset (rare; keeps init total).
+fn default_claude_dir() -> std::path::PathBuf {
+    match std::env::var("HOME") {
+        Ok(h) => std::path::PathBuf::from(h).join(".claude"),
+        Err(_) => std::path::PathBuf::from(".claude"),
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
 enum KittenError {
     #[error("{0}")]
     Validation(String),
-    // kitten: constructed by T16 `init` (exit 3 when squeez unreachable, V6).
-    #[allow(dead_code)]
+    // V6: constructed by `init` when squeez is unreachable (→ exit 3).
     #[error("squeez binary not found in PATH or ~/.claude/squeez/bin/")]
     SqueezMissing,
     #[error("io: {0}")]
@@ -818,7 +916,9 @@ mod squeez {
             "session-start" => hooks.join("session-start.sh"),
             "pre-tool" => hooks.join("pretooluse.sh"),
             "post-tool" => hooks.join("posttooluse.sh"),
+            "subagent-stop" => hooks.join("subagentstop.sh"),
             "pre-compact" => hooks.join("precompact.sh"),
+            "post-compact" => hooks.join("postcompact.sh"),
             _ => return Ok(None),
         };
         if !script.is_file() {
@@ -846,13 +946,85 @@ mod hook {
         std::io::stdin().read_to_string(&mut stdin)?;
         match event {
             "session-start" => session_start(&stdin),
+            "user-prompt" => user_prompt(&stdin),
             "pre-tool" => pre_tool(&stdin),
             "post-tool" => post_tool(&stdin),
+            "stop" => stop(&stdin),
+            "subagent-stop" => subagent_stop(&stdin),
             "pre-compact" => pre_compact(&stdin),
+            "post-compact" => post_compact(&stdin),
             other => Err(KittenError::Validation(format!(
                 "unknown hook event: {other}"
             ))),
         }
+    }
+
+    /// T53: SubagentStop — a subagent finished. The membrane covers it so squeez
+    /// can fold the subagent's output (V33: nothing bypasses); kittenscrew adds no
+    /// driving here (the parent turn's Stop hook decides). Graceful: no squeez
+    /// script → no-op.
+    fn subagent_stop(stdin: &str) -> Result<(), KittenError> {
+        if let Some(out) = squeez::run_hook("subagent-stop", stdin)? {
+            if !out.trim().is_empty() {
+                print!("{out}");
+            }
+        }
+        Ok(())
+    }
+
+    /// T53: PostCompact — after a context compaction. Delegate to squeez's
+    /// postcompact hook (session-state restore) so the membrane owns this event
+    /// too (V33). Graceful: missing script → no-op.
+    fn post_compact(stdin: &str) -> Result<(), KittenError> {
+        if let Some(out) = squeez::run_hook("post-compact", stdin)? {
+            if !out.trim().is_empty() {
+                print!("{out}");
+            }
+        }
+        Ok(())
+    }
+
+    /// T51: UserPromptSubmit intake (V35, V33). Classify the prompt, inject ONLY
+    /// targeted context (`plan next` + a referenced task's record) as
+    /// `additionalContext`. Deterministic; the LLM resolves any flagged ambiguity.
+    /// Graceful: a malformed/empty payload still emits valid (if sparse) context.
+    fn user_prompt(stdin: &str) -> Result<(), KittenError> {
+        // A genuine human turn refills the driver's auto-iteration budget (T52).
+        driver::State::reset();
+        let prompt = serde_json::from_str::<serde_json::Value>(stdin)
+            .ok()
+            .and_then(|v| v.get("prompt").and_then(|p| p.as_str()).map(str::to_owned))
+            .unwrap_or_default();
+
+        let intent = intake::classify(&prompt);
+
+        // Resolve next + the referenced task from the store (best-effort: a
+        // missing/unreadable store just yields an empty frontier, never a crash).
+        let store = store::Store::load(std::path::Path::new(store::STORE_PATH)).ok();
+        let wp = worth_params();
+        let next = store
+            .as_ref()
+            .and_then(|s| plan::next_with(s, &wp).map(|t| (t.id.clone(), t.task.clone())));
+        let referenced = match (intake::task_ref(&prompt), store.as_ref()) {
+            (Some(id), Some(s)) => s.tasks.iter().find(|t| t.id == id).cloned(),
+            _ => None,
+        };
+
+        let ctx = intake::render(
+            intent,
+            next.as_ref().map(|(i, t)| (i.as_str(), t.as_str())),
+            referenced.as_ref(),
+        );
+        // Claude Code UserPromptSubmit contract: additionalContext is injected
+        // before the turn. Emit as a JSON string (serde escapes newlines).
+        let payload = serde_json::json!({
+            "hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "additionalContext": ctx,
+            }
+        });
+        println!("{payload}");
+        Ok(())
     }
 
     /// T5: SessionStart — verify install, call `squeez init`, log ready.
@@ -873,6 +1045,86 @@ mod hook {
             None => {
                 // V2: graceful degrade — warn but don't fail.
                 eprintln!("kittenscrew: warning: squeez not found, compression disabled");
+            }
+        }
+        Ok(())
+    }
+
+    /// T52: Stop — the autonomous driver (V34). Default-OFF: with `[driver]
+    /// autonomous=false` (or outside a kittenscrew project) the hook allows the
+    /// stop silently — installing the membrane never hijacks an interactive
+    /// session. When ON: verify the turn's work (`check done` demote, V19), audit
+    /// variance, then `driver::decide` — drive on (block-stop + inject), yield, or
+    /// escalate to the user. Hard-bounded by `[driver] max_iters` (⊥ runaway).
+    fn stop(stdin: &str) -> Result<(), KittenError> {
+        let cfg = config::load().unwrap_or_default();
+        // Fast, safe path: no output = allow the stop.
+        if !cfg.driver.autonomous || !driver::has_store() {
+            return Ok(());
+        }
+        let _active = driver::stop_hook_active(stdin); // telemetry; bound is max_iters
+
+        let store_path = std::path::Path::new(store::STORE_PATH);
+        let mut s = store::Store::load(store_path)?;
+
+        // 1. Verify the turn's delivery: demote any `x` that's fake (V19). Only
+        //    persist the re-render when SPEC.md is in sync (T47: ⊥ clobber a
+        //    pending manual edit); otherwise the demote stays in-memory for the
+        //    decision and the user reconciles via `spec drift --apply`.
+        let demote: Vec<String> = check::check_done(&s)
+            .into_iter()
+            .filter(|r| !r.ok)
+            .map(|r| r.id)
+            .collect();
+        if !demote.is_empty() {
+            for t in s.tasks.iter_mut() {
+                if demote.contains(&t.id) {
+                    t.status = store::Status::Wip;
+                }
+            }
+            let on_disk = std::fs::read_to_string(SPEC_PATH).unwrap_or_default();
+            if on_disk.is_empty() || spec::is_synced(&s, &on_disk) {
+                s.save(store_path)?;
+                std::fs::write(SPEC_PATH, spec::render(&s))?;
+            }
+        }
+
+        // 2. Audit cadence: flag tasks whose delivered value missed expectation.
+        let flagged: Vec<String> = check::value_variance(&s, cfg.audit.variance_threshold)
+            .into_iter()
+            .filter(|r| r.flagged)
+            .map(|r| r.id)
+            .collect();
+
+        // 3. Decide on the next move.
+        let wp = worth_params();
+        let next = plan::next_with(&s, &wp).map(|t| (t.id.clone(), t.task.clone()));
+        let state = driver::State::load();
+        let decision = driver::decide(
+            &cfg.driver,
+            &state,
+            &flagged,
+            next.as_ref().map(|(i, t)| (i.as_str(), t.as_str())),
+        );
+
+        let k = kitty::lookup("orchestrating").expect("orchestrating kitty");
+        match decision {
+            driver::Decision::DriveOn { context } => {
+                let _ = driver::State {
+                    iters: state.iters + 1,
+                }
+                .save();
+                // Stop-hook contract: block the stop, feed `reason` as next input.
+                let payload = serde_json::json!({ "decision": "block", "reason": context });
+                println!("{payload}");
+            }
+            driver::Decision::Halt { reason } => {
+                driver::State::reset();
+                eprintln!("{} [{}] driver yields: {reason}", k.emoji, k.name);
+            }
+            driver::Decision::Escalate { packet } => {
+                driver::State::reset();
+                eprintln!("{} [{}] ESCALATE → {packet}", k.emoji, k.name);
             }
         }
         Ok(())

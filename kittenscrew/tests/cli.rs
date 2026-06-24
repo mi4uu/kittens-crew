@@ -17,6 +17,19 @@ fn run(dir: &Path, args: &[&str]) -> Output {
         .expect("spawn kittenscrew")
 }
 
+/// Run with a fully controlled environment (for V6: presence/absence of squeez).
+fn run_env(dir: &Path, args: &[&str], envs: &[(&str, &str)], clear: bool) -> Output {
+    let mut cmd = Command::new(bin());
+    cmd.args(args).current_dir(dir);
+    if clear {
+        cmd.env_clear();
+    }
+    for (k, v) in envs {
+        cmd.env(k, v);
+    }
+    cmd.output().expect("spawn kittenscrew")
+}
+
 fn run_stdin(dir: &Path, args: &[&str], stdin: &str) -> Output {
     use std::io::Write;
     let mut child = Command::new(bin())
@@ -104,6 +117,72 @@ fn apply_malformed_json_exits_two() {
     let dir = workspace("apply-json");
     let o = run_stdin(&dir, &["spec", "apply"], "not json at all");
     assert_eq!(code(&o), 2);
+}
+
+// --- T16 init (V6 squeez gate, isolation, idempotency) ---
+
+/// Fresh empty workspace with an isolated `--target` subdir (no SPEC needed).
+fn init_workspace(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("ks-init-{name}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("claude")).unwrap();
+    dir
+}
+
+#[test]
+fn init_without_squeez_exits_three() {
+    // V6: no reachable squeez → exit 3, nothing written. Cleared env so neither
+    // PATH, SQUEEZ_BIN, nor $HOME/.claude/squeez can resolve.
+    let dir = init_workspace("no-squeez");
+    let target = dir.join("claude");
+    let o = run_env(
+        &dir,
+        &["init", "--target", target.to_str().unwrap()],
+        &[("HOME", dir.to_str().unwrap())],
+        true,
+    );
+    assert_eq!(code(&o), 3);
+    assert!(!target.join("settings.json").exists());
+    assert!(!dir.join("kittenscrew.toml").exists());
+}
+
+#[test]
+fn init_dry_run_writes_nothing() {
+    let dir = init_workspace("dry");
+    let target = dir.join("claude");
+    // SQUEEZ_BIN points at a real file (the test binary) → V6 satisfied.
+    let o = run_env(
+        &dir,
+        &["init", "--target", target.to_str().unwrap(), "--dry-run"],
+        &[("SQUEEZ_BIN", bin())],
+        true,
+    );
+    assert_eq!(code(&o), 0);
+    assert!(!target.join("settings.json").exists());
+    assert!(!dir.join("kittenscrew.toml").exists());
+}
+
+#[test]
+fn init_registers_membrane_and_is_idempotent() {
+    let dir = init_workspace("wire");
+    let target = dir.join("claude");
+    let args = ["init", "--target", target.to_str().unwrap()];
+    let env = [("SQUEEZ_BIN", bin())];
+
+    let o = run_env(&dir, &args, &env, true);
+    assert_eq!(code(&o), 0);
+    let settings = std::fs::read_to_string(target.join("settings.json")).unwrap();
+    assert!(settings.contains("hook session-start"));
+    assert!(settings.contains("PreToolUse"));
+    assert!(dir.join("kittenscrew.toml").exists());
+
+    // Re-run: still exit 0, no duplicate entries (idempotent membrane).
+    let o2 = run_env(&dir, &args, &env, true);
+    assert_eq!(code(&o2), 0);
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(target.join("settings.json")).unwrap())
+            .unwrap();
+    assert_eq!(v["hooks"]["PreToolUse"].as_array().unwrap().len(), 1);
 }
 
 #[test]

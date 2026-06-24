@@ -19,6 +19,58 @@ pub struct Config {
     pub plan: PlanCfg,
     pub guard: GuardCfg,
     pub audit: AuditCfg,
+    pub compression: CompressionCfg,
+    pub driver: DriverCfg,
+}
+
+/// `[driver]` — the autonomous Stop-hook driver (T52, V34). OFF by default: a
+/// Stop hook that blocks every turn-end would hijack normal interactive use, so
+/// installing the membrane never auto-drives until you opt in. When on, the
+/// driver is HARD-bounded by `max_iters` consecutive auto-iterations (⊥ runaway)
+/// and escalates to the real user on any flagged variance (V27).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DriverCfg {
+    /// Drive the plan forward on turn-end without waiting for the user.
+    pub autonomous: bool,
+    /// Hard cap on consecutive auto-iterations before yielding to the user.
+    pub max_iters: u32,
+}
+impl Default for DriverCfg {
+    fn default() -> Self {
+        DriverCfg {
+            autonomous: false,
+            max_iters: 8,
+        }
+    }
+}
+
+/// `[compression]` — the per content-class level policy (T49, V32). kittenscrew
+/// owns *which* level applies to *which* class; squeez does the actual work
+/// (V10). Defaults follow V32: aggressive where savings are high and a fidelity
+/// slip is harmless (prose/dumps), a lossless floor where a slip forces a re-run
+/// (structured output, diffs). Tune empirically with the T50 harness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CompressionCfg {
+    /// Narrative text, explanations, docs — loss ≈ 0, compress hard.
+    pub prose: String,
+    /// Verbose logs, large reads, grep floods — highest savings.
+    pub dump: String,
+    /// JSON, paths, numbers, build/test errors — lossless floor (re-run cost).
+    pub structured: String,
+    /// Patches/diffs — lossless floor (a mangled hunk is unusable).
+    pub diff: String,
+}
+impl Default for CompressionCfg {
+    fn default() -> Self {
+        CompressionCfg {
+            prose: "full".into(),
+            dump: "ultra".into(),
+            structured: "off".into(),
+            diff: "off".into(),
+        }
+    }
 }
 
 /// `[audit]` — cadence + thresholds for the cyclic re-eval loops (T42, V25).

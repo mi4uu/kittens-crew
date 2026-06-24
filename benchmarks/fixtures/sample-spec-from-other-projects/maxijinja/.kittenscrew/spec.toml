@@ -1,0 +1,340 @@
+schema = 1
+goal = "Rust crate. Build styled + interactive UI components (radix/shadcn/coreui-like) for axum apps using minijinja + htmx. React-like ergonomics, zero external JS/CSS build step. SSE supported. Ship component lib + live interactive showcase."
+constraints = [
+    "C1 lang Rust. server axum (primary target).",
+    "C2 templating minijinja. fragment render = first-class.",
+    "C3 htmx = primary interaction model.",
+    "C4 alpine.js (or equal-simple) = sprinkle interactivity when htmx not enough.",
+    "C5 NO external build tooling. no node/npm/vite/webpack/tailwind-CLI to use lib or render.",
+    "C6 apps backend-driven. server owns state + markup.",
+    "C7 SSE = push updates, server-rendered fragments.",
+    "C8 DX simple + pleasant. ergonomic Rust API.",
+    "C9 components styled out-of-box, self-contained CSS shipped by lib.",
+    "C10 ship showcase: component gallery + runnable interactive examples.",
+    "C11 NO utility-CSS frameworks (tailwind etc) — they need extra build tools. own curated CSS instead.",
+    "C12 built-in light + dark themes.",
+    "C13 easy customize: lead colors, opacity/transparency, radius etc via CSS vars, no recompile.",
+    "C14 curated helper/utility classes. essential set, NOT tailwind-billion.",
+]
+interfaces = [
+    "I.comp   Rust component API. typed builders → html.",
+    "I.axum   axum integration. response helpers, extractors, fragment-vs-full detect.",
+    "I.jinja  minijinja registration. component fns/filters/templates.",
+    "I.htmx   htmx attribute helpers (hx-get/post/swap/target/trigger).",
+    "I.alpine alpine-style sprinkle helpers in templates.",
+    "I.sse    SSE endpoint helper + event→fragment render.",
+    "I.css    self-contained CSS: tokens + light/dark themes + curated utilities, served by lib, no bundler.",
+    "I.theme  theme API: switch light/dark, override CSS vars (color/opacity/radius) for customization.",
+    "I.show   showcase/playground binary. gallery + live examples.",
+    "I.layout layout primitives: grid / stack / cluster → composable Markup.",
+]
+
+[[invariant]]
+id = "V1"
+text = "fragment-vs-full: HX-Request header present → render fragment only. absent → full page. server sends only needed/changed markup."
+
+[[invariant]]
+id = "V2"
+text = "zero-build: lib usable + components render with zero node/npm/bundler step."
+
+[[invariant]]
+id = "V3"
+text = "scoped styles: component emits valid html + scoped CSS. no class-name collision across components."
+
+[[invariant]]
+id = "V4"
+text = "sse-fragments: SSE event renders minijinja fragment, pushed to client, swapped via htmx-sse."
+
+[[invariant]]
+id = "V5"
+text = "a11y: interactive components keyboard-navigable + correct aria (radix-like)."
+
+[[invariant]]
+id = "V6"
+text = "compose: components compose into axum responses w/o manual string concat."
+
+[[invariant]]
+id = "V7"
+text = "sprinkle: common interactivity via declarative attrs. no hand-written JS for common cases."
+
+[[invariant]]
+id = "V8"
+text = "showcase-live: showcase runs standalone, examples interactive not static."
+
+[[invariant]]
+id = "V9"
+text = "themes: light + dark both built-in, switch at runtime w/o rebuild."
+
+[[invariant]]
+id = "V10"
+text = "customize: lead colors, opacity, radius etc set via CSS custom props. no recompile, no extra tool."
+
+[[invariant]]
+id = "V11"
+text = "utilities-curated: helper classes = essential curated set. covers common needs, NOT exhaustive tailwind-scale."
+
+[[invariant]]
+id = "V12"
+text = "no-extra-tooling: styling requires zero downloaded CSS tool (no tailwind/postcss/sass CLI)."
+
+[[invariant]]
+id = "V13"
+text = "overlay-no-clip: popover/menu/overlay markup must NOT be clipped by ancestor overflow. containers holding them stay overflow-visible."
+
+[[invariant]]
+id = "V14"
+text = "showcase-code: every showcase example displays its usage code next to the live demo."
+
+[[invariant]]
+id = "V15"
+text = "input-variants: Input supports label placement (top/floating/hidden) + hint/error text + size, all a11y-correct."
+
+[[task]]
+id = "T1"
+status = "done"
+task = "scaffold workspace: lib crate + showcase bin"
+deps = []
+priority = 0
+cites = ["C1"]
+scope = []
+note = ""
+
+[[task]]
+id = "T2"
+status = "done"
+task = "minijinja integration: register component tmpl/fns"
+deps = []
+priority = 0
+cites = [
+    "C2",
+    "I.jinja",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T3"
+status = "done"
+task = "axum response helpers + HX-Request fragment detect"
+deps = []
+priority = 0
+cites = [
+    "V1",
+    "V6",
+    "I.axum",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T4"
+status = "done"
+task = "component trait + typed builders → html"
+deps = []
+priority = 0
+cites = [
+    "V3",
+    "V6",
+    "I.comp",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T5"
+status = "done"
+task = "design tokens + scoped CSS bundle, served by lib"
+deps = []
+priority = 0
+cites = [
+    "V2",
+    "V3",
+    "C5",
+    "I.css",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T5a"
+status = "done"
+task = "light+dark themes via CSS vars"
+deps = []
+priority = 0
+cites = [
+    "V9",
+    "C12",
+    "I.theme",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T5b"
+status = "done"
+task = "theme override API: colors/opacity/radius custom props"
+deps = []
+priority = 0
+cites = [
+    "V10",
+    "C13",
+    "I.theme",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T5c"
+status = "done"
+task = "curated utility/helper classes (essential set)"
+deps = []
+priority = 0
+cites = [
+    "V11",
+    "C14",
+    "I.css",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T6"
+status = "done"
+task = "base components: button card input modal tabs dropdown"
+deps = []
+priority = 0
+cites = [
+    "V3",
+    "V5",
+    "I.comp",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T7"
+status = "done"
+task = "htmx attribute helpers"
+deps = []
+priority = 0
+cites = [
+    "V1",
+    "I.htmx",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T8"
+status = "done"
+task = "alpine-style sprinkle helpers in templates"
+deps = []
+priority = 0
+cites = [
+    "V7",
+    "C4",
+    "I.alpine",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T9"
+status = "done"
+task = "SSE helper: event→fragment render + htmx-sse swap"
+deps = []
+priority = 0
+cites = [
+    "V4",
+    "C7",
+    "I.sse",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T10"
+status = "done"
+task = "a11y pass: keyboard + aria on interactive comps"
+deps = []
+priority = 0
+cites = ["V5"]
+scope = []
+note = ""
+
+[[task]]
+id = "T11"
+status = "done"
+task = "showcase app: gallery + runnable interactive examples"
+deps = []
+priority = 0
+cites = [
+    "V8",
+    "I.show",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T12"
+status = "done"
+task = "fix dropdown clip: overlay-safe containers"
+deps = []
+priority = 0
+cites = [
+    "V13",
+    "I.css",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T13"
+status = "done"
+task = "input variants: floating/hidden label, hint, error, size"
+deps = []
+priority = 0
+cites = [
+    "V15",
+    "I.comp",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T14"
+status = "done"
+task = "layout primitives: grid/stack/cluster + util classes"
+deps = []
+priority = 0
+cites = [
+    "I.layout",
+    "V11",
+]
+scope = []
+note = ""
+
+[[task]]
+id = "T15"
+status = "done"
+task = "showcase: Example wrapper shows live demo + usage code"
+deps = []
+priority = 0
+cites = [
+    "V14",
+    "I.show",
+]
+scope = []
+note = ""
+
+[[bug]]
+id = "id"
+date = "date"
+cause = "cause"
+fix = "fix"
+
+[[bug]]
+id = "B1"
+date = "2026-06-11"
+cause = "dropdown menu clipped — .mj-card overflow:hidden cut absolutely-positioned .mj-menu"
+fix = "V13"
