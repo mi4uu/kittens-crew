@@ -8,6 +8,7 @@ use std::io::{Read, Write};
 use std::process::{Command, ExitCode, Stdio};
 
 mod check;
+mod config;
 mod drift;
 mod plan;
 mod spec;
@@ -48,8 +49,19 @@ enum Cmd {
         /// Hook event: session-start | pre-tool | post-tool | pre-compact.
         event: String,
     },
+    /// Per-project config (T15): `kittenscrew.toml` parse + defaults.
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
     /// Init: write kittenscrew.toml + register hooks (T16).
     Init,
+}
+
+#[derive(Subcommand, Debug)]
+enum ConfigAction {
+    /// Resolve `kittenscrew.toml` (defaults if absent) → JSON.
+    Show,
 }
 
 #[derive(Subcommand, Debug)]
@@ -151,6 +163,7 @@ fn run(cli: Cli) -> Result<(), KittenError> {
         Cmd::Spec { action } => spec_cmd(action),
         Cmd::Plan { action } => plan_cmd(action),
         Cmd::Check { action } => check_cmd(action),
+        Cmd::Config { action } => config_cmd(action),
         Cmd::Hook { event } => hook::dispatch(&event),
         Cmd::Init => init_stub(),
     }
@@ -459,6 +472,16 @@ fn check_cmd(action: CheckAction) -> Result<(), KittenError> {
                 demote.len(),
                 demote.join(",")
             )))
+        }
+    }
+}
+
+fn config_cmd(action: ConfigAction) -> Result<(), KittenError> {
+    match action {
+        ConfigAction::Show => {
+            let c = config::load().map_err(KittenError::Validation)?;
+            println!("{}", serde_json::to_string_pretty(&c).unwrap());
+            Ok(())
         }
     }
 }

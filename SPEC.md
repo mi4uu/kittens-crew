@@ -55,6 +55,7 @@ North star: ⊥ just fewer tokens — move work DOWN the model-size ladder w/o q
 - cmd: `kittenscrew plan path [<goal>]` → JSON {path[], length} critical/longest prereq chain
 - cmd: `kittenscrew plan alternatives` → JSON [{id, task, scope, unblocks, blocks}] frontier choices
 - cmd: `kittenscrew hook <event>` → runs hook logic for SessionStart|PreToolUse|PostToolUse|PreCompact
+- cmd: `kittenscrew config show` → resolved `kittenscrew.toml` (defaults if absent) → JSON
 - cmd: `kittenscrew init` → writes `kittenscrew.toml` template, registers hooks in `~/.claude/settings.json`
 - file: `kittenscrew.toml` schema → `[kitty] compression_level`, `[hooks] pre, post, session, compact`, `[docs] auto_generate, detail (terse|normal|explain), target (dev|idiot)`, `[plan] strict_ordering`, `[guard] blocked_cmds=[…]`
 - env: `KITTENSCREW_CONFIG` → path to config (default `./kittenscrew.toml`)
@@ -109,7 +110,7 @@ T11|x|impl `kittenscrew spec check` → structural: deps/cites resolve, ids uniq
 T12|∅|impl `kittenscrew plan resolve` → parse §T table, build DAG, topo-sort|-|§I,V4   (superseded by T28 (plan resolve/topo-sort)
 T13|∅|impl `kittenscrew plan next` → filter `.` tasks w/ all deps `x`, return lowest id|-|§I   (superseded by T28 (plan next)
 T14|∅|impl `kittenscrew plan done <id>` → flip `.`→`x` in §T row, validate id exists|-|§I   (superseded by plan done cmd)
-T15|.|impl `kittenscrew.toml` parser + defaults (compression_level, hooks list, docs.auto_generate)|-|§I
+T15|x|impl `kittenscrew.toml` parser + defaults (compression_level, hooks list, docs.auto_generate)|-|§I
 T16|.|impl `kittenscrew init` → write `kittenscrew.toml` template + register hooks in `~/.claude/settings.json`|-|V6
 T17|x|add `kittenscrew` to PATH in `claudeoneprovider.sh` & `claudeopenrouter.sh`|-|§C
 T18|.|write `kittenscrew/tests/` integration tests (1 per §I command, assert exit codes per V1)|-|V1
@@ -141,6 +142,7 @@ T43|.|deliberation pipeline engine: primitives {brainstorm,research,evaluate,ask
 T44|.|`kittenscrew review` — assemble diff + ONLY relevant spec fragment + role prompt → call config'd remote agent(s) (OpenRouter via curl, 0-dep) → collect few-sentence notes/suggestions → feed deliberation (eval\|brainstorm\|ask). optional, advisory, absent-config=skip|T41|V26,V27,V29
 T45|.|interface-completeness gate: test §I declared cmds ⊆ binary clap subcommand tree (forge §I↔code drift lesson into deterministic floor)|-|V28
 T46|.|persist toml-only fields (value/difficulty/risk/priority/scope/eval) across SPEC.md round-trip — decide: commit store \| render into SPEC.md \| sidecar. currently LOST on reimport (gitignored store + SPEC.md ⊥ carries them), silently|-|V9,V23
+T47|.|render-triggering cmds (spec apply, plan done, check done demote) detect SPEC.md drift vs store FIRST → abort + suggest `spec drift --apply` (prevent silent clobber of manual prose §G/§C/§I/§V edits). Discovered live: hand-edit §I then apply rendered stale store, dropped the edit|T29|V9,V16
 
 ## §B BUGS
 
