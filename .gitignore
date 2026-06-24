@@ -29,3 +29,7 @@ claudeopenrouter.sh
 benchmarks/arena/state/
 benchmarks/arena/.env
 benchmarks/arena/kittenscrew/
+
+# arena run artifacts (keep results.md, drop heavy/runtime)
+benchmarks/arena/results/src/
+benchmarks/arena/results/*.jsonl
