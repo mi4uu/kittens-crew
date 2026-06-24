@@ -17,4 +17,6 @@ benchmarks/agency/_oracle_*.json
 
 # kittenscrew
 kittenscrew/target/
-.kittenscrew/
+# .kittenscrew/spec.toml = authoritative store (V9) → committed (T46).
+# Only ephemeral checkpoints are ignored.
+.kittenscrew/*.json

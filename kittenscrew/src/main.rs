@@ -293,8 +293,19 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
         }
         SpecAction::Import => {
             let md = std::fs::read_to_string(SPEC_PATH)?;
-            let s = spec::import(&md)?;
-            s.save(Path::new(store::STORE_PATH))?;
+            let mut s = spec::import(&md)?;
+            // T46: SPEC.md can't carry toml-only fields (value/difficulty/risk/
+            // priority/scope/eval). Re-import would drop them → merge from the
+            // existing store by id so they survive the round-trip.
+            let store_path = Path::new(store::STORE_PATH);
+            if let Ok(old) = store::Store::load(store_path) {
+                for t in s.tasks.iter_mut() {
+                    if let Some(prev) = old.tasks.iter().find(|o| o.id == t.id) {
+                        drift::carry_toml_only(t, prev);
+                    }
+                }
+            }
+            s.save(store_path)?;
             let k = kitty::lookup("planning").expect("planning kitty");
             println!(
                 "{} [{}] imported → {} ({} tasks, {} invariants, {} bugs)",

@@ -105,11 +105,21 @@ pub fn reconcile(current: &Store, incoming: &Store) -> Store {
     let mut merged = incoming.clone();
     for t in merged.tasks.iter_mut() {
         if let Some(old) = current.tasks.iter().find(|o| o.id == t.id) {
-            t.priority = old.priority;
-            t.scope = old.scope.clone();
+            carry_toml_only(t, old);
         }
     }
     merged
+}
+
+/// Copy every toml-only field (not expressible in SPEC.md, so an import/render
+/// round-trip would otherwise drop them, T46) from `old` onto `new`.
+pub fn carry_toml_only(new: &mut crate::store::Task, old: &crate::store::Task) {
+    new.priority = old.priority;
+    new.scope = old.scope.clone();
+    new.value = old.value;
+    new.difficulty = old.difficulty;
+    new.risk = old.risk;
+    new.eval = old.eval.clone();
 }
 
 #[cfg(test)]
@@ -183,6 +193,30 @@ mod tests {
         assert_eq!(t.status, Status::Done); // structural edit adopted
         assert_eq!(t.priority, 7); // toml-only carried over
         assert_eq!(t.scope, vec!["src/x.rs".to_string()]);
+    }
+
+    #[test]
+    fn carry_toml_only_restores_value_difficulty_risk_eval() {
+        let mut old = task("T1", Status::Done, "a");
+        old.value = 5;
+        old.difficulty = 3;
+        old.risk = 2;
+        old.eval = Some(crate::store::TaskEval {
+            satisfaction: 4,
+            conformance: 5,
+            tokens: 100,
+            note: "ok".into(),
+        });
+        let mut fresh = task("T1", Status::Done, "a"); // re-imported, fields lost
+        fresh.value = 0;
+        fresh.difficulty = 0;
+        fresh.risk = 0;
+        fresh.eval = None;
+        carry_toml_only(&mut fresh, &old);
+        assert_eq!(fresh.value, 5);
+        assert_eq!(fresh.difficulty, 3);
+        assert_eq!(fresh.risk, 2);
+        assert_eq!(fresh.eval.unwrap().satisfaction, 4);
     }
 
     #[test]
