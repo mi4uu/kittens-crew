@@ -13,6 +13,7 @@ mod config;
 mod docs;
 mod drift;
 mod driver;
+mod gate;
 mod init;
 mod intake;
 mod plan;
@@ -1060,6 +1061,12 @@ mod hook {
         } else if let Some((_, task)) = next.as_ref() {
             ctx.push_str(&format!("suggested role: {}\n", kitty::role_hint(task)));
         }
+        // T57: no plan → no work. Whatever the user said (even casual chatter, no
+        // commands), the cats listen and route it into a plan FIRST — don't free-build.
+        let gcfg = config::load().unwrap_or_default();
+        if gcfg.gate.enforce_plan && !gate::plan_exists() {
+            ctx.push_str(&format!("\n⚠ NO PLAN EXISTS — {}\n", gate::PLAN_STEER));
+        }
         // Claude Code UserPromptSubmit contract: additionalContext is injected
         // before the turn. Emit as a JSON string (serde escapes newlines).
         let payload = serde_json::json!({
@@ -1185,12 +1192,20 @@ mod hook {
     /// T6: PreToolUse — run kittenscrew checks first (blocked commands etc.),
     /// then delegate compression to squeez pretooluse.sh.
     fn pre_tool(stdin: &str) -> Result<(), KittenError> {
+        // 0. T57 plan-gate: no plan → no work. Block product-code writes until a
+        //    plan store exists, with a reason that routes the agent to planning.
+        let cfg = config::load().unwrap_or_default();
+        if cfg.gate.enforce_plan && !gate::plan_exists() {
+            let (tool, path) = tool_target(stdin);
+            if gate::blocks(&tool, &path) {
+                deny_pre_tool(gate::PLAN_STEER);
+                return Ok(());
+            }
+        }
         // 1. Kittenscrew-specific: validate against blocked commands (T15 will load config).
         if let Some(block_reason) = check_blocked(stdin) {
             // Emit block decision JSON for Claude Code.
-            println!(
-                r#"{{"hookSpecificOutput":{{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"kittenscrew blocked: {block_reason}"}}}}"#
-            );
+            deny_pre_tool(&format!("kittenscrew blocked: {block_reason}"));
             return Ok(());
         }
         // 2. Delegate compression to squeez hook script.
@@ -1252,6 +1267,35 @@ mod hook {
             None => String::new(),
         };
         (tool, content)
+    }
+
+    /// Extract `(tool_name, file_path)` from a PreToolUse payload (for the gate).
+    fn tool_target(stdin: &str) -> (String, String) {
+        let v: serde_json::Value = serde_json::from_str(stdin).unwrap_or_default();
+        let tool = v
+            .get("tool_name")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_owned();
+        let path = v
+            .get("tool_input")
+            .and_then(|i| i.get("file_path"))
+            .and_then(|p| p.as_str())
+            .unwrap_or("")
+            .to_owned();
+        (tool, path)
+    }
+
+    /// Emit the PreToolUse deny decision (Claude Code routes the reason back).
+    fn deny_pre_tool(reason: &str) {
+        let payload = serde_json::json!({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": reason,
+            }
+        });
+        println!("{payload}");
     }
 
     /// T8: PreCompact — delegate to squeez + snapshot plan.
