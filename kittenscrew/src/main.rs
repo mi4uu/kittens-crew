@@ -8,6 +8,7 @@ use std::io::{Read, Write};
 use std::process::{Command, ExitCode, Stdio};
 
 mod check;
+mod compression;
 mod config;
 mod docs;
 mod drift;
@@ -59,6 +60,11 @@ enum Cmd {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Compression policy (T49, V32): per content-class squeez level.
+    Compression {
+        #[command(subcommand)]
+        action: CompressionAction,
+    },
     /// Per-task docs (T23): `docs task <id>` → `docs/<id>-<slug>.md` (V12, opt-in).
     Docs {
         #[command(subcommand)]
@@ -83,6 +89,17 @@ enum Cmd {
 enum ConfigAction {
     /// Resolve `kittenscrew.toml` (defaults if absent) → JSON.
     Show,
+}
+
+#[derive(Subcommand, Debug)]
+enum CompressionAction {
+    /// Print the full class→level policy as JSON.
+    Policy,
+    /// Print the squeez level for one content-class (exit 2 if unknown).
+    Level {
+        /// Content-class: prose | dump | structured | diff.
+        class: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -199,6 +216,7 @@ fn run(cli: Cli) -> Result<(), KittenError> {
         Cmd::Check { action } => check_cmd(action),
         Cmd::Score => score_cmd(),
         Cmd::Config { action } => config_cmd(action),
+        Cmd::Compression { action } => compression_cmd(action),
         Cmd::Docs { action } => docs_cmd(action),
         Cmd::Hook { event } => hook::dispatch(&event),
         Cmd::Init {
@@ -667,6 +685,30 @@ fn config_cmd(action: ConfigAction) -> Result<(), KittenError> {
         ConfigAction::Show => {
             let c = config::load().map_err(KittenError::Validation)?;
             println!("{}", serde_json::to_string_pretty(&c).unwrap());
+            Ok(())
+        }
+    }
+}
+
+/// T49: the compression POLICY (V32). Reads `[compression]` (defaults if absent)
+/// and reports the squeez level per content-class. Pure policy — no compression
+/// happens here (V10); squeez consumes the level.
+fn compression_cmd(action: CompressionAction) -> Result<(), KittenError> {
+    let cfg = config::load().map_err(KittenError::Validation)?.compression;
+    match action {
+        CompressionAction::Policy => {
+            let map: std::collections::BTreeMap<&str, &str> =
+                compression::policy(&cfg).into_iter().collect();
+            println!("{}", serde_json::to_string_pretty(&map).unwrap());
+            Ok(())
+        }
+        CompressionAction::Level { class } => {
+            let c = compression::Class::parse(&class).ok_or_else(|| {
+                KittenError::Validation(format!(
+                    "unknown content-class: {class} (expected prose|dump|structured|diff)"
+                ))
+            })?;
+            println!("{}", compression::level_for(&cfg, c));
             Ok(())
         }
     }
