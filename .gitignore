@@ -24,3 +24,8 @@ kittenscrew/target/
 # local provider scripts (contain API keys — never commit)
 claudeoneprovider.sh
 claudeopenrouter.sh
+
+# arena benchmark runtime
+benchmarks/arena/state/
+benchmarks/arena/.env
+benchmarks/arena/kittenscrew/
