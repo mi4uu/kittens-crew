@@ -16,6 +16,7 @@ mod driver;
 mod gate;
 mod init;
 mod intake;
+mod kitty;
 mod plan;
 mod score;
 mod spec;
@@ -233,8 +234,8 @@ fn run(cli: Cli) -> Result<(), KittenError> {
 fn kitty_says(kitty: &str, message: &str) -> Result<(), KittenError> {
     let k = kitty::lookup(kitty)
         .ok_or_else(|| KittenError::Validation(format!("unknown kitty: {kitty}")))?;
-    // V5: ∀ output → emoji + [Name] + raw message. No mutation.
-    println!("{} [{}] {}", k.emoji, k.name, message);
+    // V5: role-coloured frame + sentiment emotion + role emoji + [Name] + raw message.
+    println!("{}", kitty::say(k, message));
     Ok(())
 }
 
@@ -787,98 +788,6 @@ impl KittenError {
     }
 }
 
-mod kitty {
-    pub struct Kitty {
-        pub id: &'static str,
-        pub emoji: &'static str,
-        pub name: &'static str,
-        pub role: &'static str,
-    }
-
-    pub const ALL: &[Kitty] = &[
-        Kitty {
-            id: "orchestrating",
-            emoji: "🎩",
-            name: "Orchestrating Kitty",
-            role: "routing + final summary",
-        },
-        Kitty {
-            id: "planning",
-            emoji: "📐",
-            name: "Planning Kitty",
-            role: "spec / SPEC.md",
-        },
-        Kitty {
-            id: "builder",
-            emoji: "🔨",
-            name: "Builder Kitty",
-            role: "build + ladder",
-        },
-        Kitty {
-            id: "entropy",
-            emoji: "😼",
-            name: "Entropy Kitty",
-            role: "check, drift & bloat hunt",
-        },
-        Kitty {
-            id: "memory",
-            emoji: "🧠",
-            name: "Memory Kitty",
-            role: "backprop, bug → §B+§V",
-        },
-        Kitty {
-            id: "scribe",
-            emoji: "🖋️",
-            name: "Scribe Kitty",
-            role: "README, docs, comments",
-        },
-    ];
-
-    pub fn all() -> &'static [Kitty] {
-        ALL
-    }
-
-    pub fn lookup(id: &str) -> Option<&'static Kitty> {
-        ALL.iter().find(|k| k.id == id)
-    }
-
-    /// T55: deterministic task → kitty role. Which hat fits this task's work?
-    /// Ordered: docs → entropy(check/review) → memory(bug) → planning(spec) →
-    /// builder (the default — implementation). Lets the hooks tell the agent which
-    /// role to adopt for the current task (orchestration, not voice decoration).
-    pub fn for_task(task: &str) -> &'static Kitty {
-        let t = task.to_ascii_lowercase();
-        let any = |kws: &[&str]| kws.iter().any(|k| t.contains(k));
-        let id = if any(&["readme", "doc", "comment", "changelog"]) {
-            "scribe"
-        } else if any(&[
-            "check",
-            "drift",
-            "review",
-            "scan",
-            "variance",
-            "audit",
-            "bloat",
-            "dead code",
-        ]) {
-            "entropy"
-        } else if any(&["bug", "regression", "backprop"]) {
-            "memory"
-        } else if any(&["spec", "plan", "invariant", "§", "topo", "dag"]) {
-            "planning"
-        } else {
-            "builder"
-        };
-        lookup(id).unwrap_or(&ALL[0])
-    }
-
-    /// One-line role hint for context injection: `🔨 [Builder Kitty] build + ladder`.
-    pub fn role_hint(task: &str) -> String {
-        let k = for_task(task);
-        format!("{} [{}] {}", k.emoji, k.name, k.role)
-    }
-}
-
 /// squeez binary + hook scripts detection + invocation. V2: graceful degrade.
 mod squeez {
     use super::*;
@@ -1378,8 +1287,10 @@ mod tests {
     }
 
     #[test]
-    fn kitty_all_has_six_kitties() {
-        assert_eq!(kitty::all().len(), 6);
+    fn kitty_roster_is_populated() {
+        // 6 founding cats + the control-plane crew (helper/explorer/style/grill).
+        assert_eq!(kitty::all().len(), 10);
+        assert!(kitty::lookup("grill").is_some());
     }
 
     #[test]

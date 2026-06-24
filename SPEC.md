@@ -73,7 +73,7 @@ V1: ∀ kittenscrew cmd → exits 0 on success, 2 on validation fail, 1 on inter
 V2: `kittenscrew hook <event>` ! exits nonzero if squeez missing — log + continue (graceful degrade)
 V3: `kittenscrew spec apply` ⊥ writes to SPEC.md if diff violates any §V rule — emits warning + returns diff to caller
 V4: `kittenscrew plan resolve` → ∀ §T task ! appears in exactly 1 position in topo-sort
-V5: `kittenscrew kitty says` output ! includes kitty emoji + `[Name]` prefix + raw message — no mutation of message
+V5: `kittenscrew kitty says` output ! = role-coloured frame `▌` + sentiment emotion-emoji (😿/😾/😺/😻/🙀/😼, derived from the message) + role emoji + `[Name]` + raw message — colour from role, emotion from message, message itself never mutated
 V6: `kittenscrew init` ! registers hooks only after verifying `squeez` reachable — exit 3 if not
 V7: hook shims ! invoke `squeez` directly — always via `kittenscrew` (single entry point)
 V8: ∀ command output → caveman format w/ symbols (→, ∀, ⊥, ∅, !)
