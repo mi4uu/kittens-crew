@@ -14,3 +14,7 @@ benchmarks/agency/judge-bundles/
 benchmarks/agency/**/target/
 __pycache__/
 benchmarks/agency/_oracle_*.json
+
+# kittenscrew
+kittenscrew/target/
+.kittenscrew/
