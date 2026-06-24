@@ -244,9 +244,79 @@ pub fn say(k: &Kitty, message: &str) -> String {
     )
 }
 
+/// Terminal display width — emojis render as 2 cells, variation selectors as 0.
+/// Naive but good enough to keep the comic boxes from going ragged on our emoji.
+fn display_width(s: &str) -> usize {
+    s.chars()
+        .map(|c| {
+            let u = c as u32;
+            if u == 0xFE0F {
+                0
+            } else if (0x1F000..=0x1FAFF).contains(&u) || (0x2600..=0x27BF).contains(&u) {
+                2
+            } else {
+                1
+            }
+        })
+        .sum()
+}
+
+/// Box-drawing chars `(tl, tr, bl, br, h, v)` for a frame style.
+fn box_chars(style: &str) -> (char, char, char, char, char, char) {
+    match style {
+        "heavy" | "bold" => ('┏', '┓', '┗', '┛', '━', '┃'),
+        "double" => ('╔', '╗', '╚', '╝', '═', '║'),
+        "classic" | "ascii" => ('+', '+', '+', '+', '-', '|'),
+        _ => ('╭', '╮', '╰', '╯', '─', '│'), // rounded (default)
+    }
+}
+
+/// A comic speech-bubble box, framed in the role's colour, the speaker
+/// (emotion + role emoji + name) sitting on the top border. `style`:
+/// rounded (default) | heavy | double | classic. Message never mutated.
+pub fn boxed(k: &Kitty, message: &str, style: &str) -> String {
+    let c = color(k.id);
+    let (tl, tr, bl, br, h, v) = box_chars(style);
+    let label = format!("{} {} {}", emotion(message), k.emoji, k.name);
+    let lines: Vec<&str> = if message.is_empty() {
+        vec![""]
+    } else {
+        message.lines().collect()
+    };
+    let body_w = lines.iter().map(|l| display_width(l)).max().unwrap_or(0);
+    let inner = body_w.max(display_width(&label) + 2); // content width inside the V bars
+
+    let hh = |n: usize| h.to_string().repeat(n);
+    // top border spans inner+2 cells between corners: `{h} {label} {fill h…}`
+    let label_w = display_width(&label);
+    let top_fill = (inner + 2).saturating_sub(label_w + 3); // 1 lead h + 2 spaces
+    let mut out = format!("\x1b[{c}m{tl}{h} {label} {}{tr}\x1b[0m\n", hh(top_fill));
+    for l in &lines {
+        let pad = inner.saturating_sub(display_width(l));
+        out.push_str(&format!(
+            "\x1b[{c}m{v}\x1b[0m {l}{} \x1b[{c}m{v}\x1b[0m\n",
+            " ".repeat(pad)
+        ));
+    }
+    out.push_str(&format!("\x1b[{c}m{bl}{}{br}\x1b[0m", hh(inner + 2)));
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn boxed_frames_message_in_role_colour() {
+        let k = lookup("grill").unwrap();
+        let b = boxed(k, "it WILL panic", "rounded");
+        assert!(b.contains("\x1b[91m╭")); // red rounded top
+        assert!(b.contains("Grill Kitty"));
+        assert!(b.contains("it WILL panic"));
+        assert!(b.contains("╰")); // bottom
+                                  // heavy style uses ┏
+        assert!(boxed(k, "x", "heavy").contains('┏'));
+    }
 
     #[test]
     fn emotion_reads_sentiment() {

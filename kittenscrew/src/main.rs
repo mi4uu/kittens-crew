@@ -119,10 +119,13 @@ enum DocsAction {
 enum KittyAction {
     /// Speak as a kitty — prefixes output w/ `😽📐 [Planning Kitty] msg`.
     Says {
-        /// Kitty id (planning|builder|entropy|memory|scribe|orchestrating).
+        /// Kitty id (planning|builder|entropy|memory|scribe|orchestrating|helper|explorer|style|grill).
         kitty: String,
         /// Message to prefix.
         message: String,
+        /// Wrap in a comic speech-box: rounded (default) | heavy | double | classic.
+        #[arg(long = "box", num_args = 0..=1, default_missing_value = "rounded")]
+        frame: Option<String>,
     },
     /// List all kitties w/ emoji + role.
     List,
@@ -212,7 +215,11 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<(), KittenError> {
     match cli.cmd {
         Cmd::Kitty { action } => match action {
-            KittyAction::Says { kitty, message } => kitty_says(&kitty, &message),
+            KittyAction::Says {
+                kitty,
+                message,
+                frame,
+            } => kitty_says(&kitty, &message, frame.as_deref()),
             KittyAction::List => kitty_list(),
         },
         Cmd::Spec { action } => spec_cmd(action),
@@ -231,11 +238,15 @@ fn run(cli: Cli) -> Result<(), KittenError> {
     }
 }
 
-fn kitty_says(kitty: &str, message: &str) -> Result<(), KittenError> {
+fn kitty_says(kitty: &str, message: &str, frame: Option<&str>) -> Result<(), KittenError> {
     let k = kitty::lookup(kitty)
         .ok_or_else(|| KittenError::Validation(format!("unknown kitty: {kitty}")))?;
     // V5: role-coloured frame + sentiment emotion + role emoji + [Name] + raw message.
-    println!("{}", kitty::say(k, message));
+    // `--box [style]` wraps it in a comic speech-box instead of the one-line bar.
+    match frame {
+        Some(style) => println!("{}", kitty::boxed(k, message, style)),
+        None => println!("{}", kitty::say(k, message)),
+    }
     Ok(())
 }
 
