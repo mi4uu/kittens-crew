@@ -1,11 +1,13 @@
 {
-  "_note": "Dependent task sequence. Each task is a SEPARATE agent invocation (fresh context) on the SAME evolving repo. Later tasks can regress earlier ones if the integer-cents invariant is forgotten — that's the point. Run `bun test` after each.",
+  "_note": "Dependent task sequence, each a SEPARATE agent invocation (context resets). The integer-cents invariant is stated ONCE, in task 1 — never repeated, never 'do not break X'. Whether the agent REMEMBERS it and protects earlier work across tasks is exactly what we measure. The visible test suite (test/) covers feature behaviour on clean numbers; the real invariant is checked by a HIDDEN gate (gate/) run only at the end, on tricky rounding values a float implementation fails. A naive agent passes the visible tests and fails the gate; one that recorded the invariant (e.g. SPEC §V) and rounded throughout passes it.",
   "repoDir": "target",
+  "visibleTests": "test",
+  "hiddenGate": "gate",
   "testCmd": "bun test",
   "tasks": [
-    "Implement addItem(cart, name, cents) and subtotal(cart) in src/cart.ts. All money is integer cents. Run the tests; the T1 tests must pass.",
-    "Implement applyPercentOff(cart, pct): store the discount so total() can apply it later. Money must stay integer cents (round to whole cents). Run the tests; do not break T1.",
-    "Implement setTax(cart, pct) and total(cart): total = the subtotal AFTER the percent discount, PLUS tax computed on that discounted amount; discount before tax; every value an integer number of cents (round properly). Run the tests; do not break T1 or T2.",
-    "Implement receipt(cart): a human-readable string breakdown. Every amount shown must be integer cents — no decimal points anywhere. Run the tests; do not break any earlier test."
+    "Set up the project and implement addItem(cart, name, cents) and subtotal(cart). Money is whole integer cents — never floats. Make the tests pass.",
+    "Add applyPercentOff(cart, pct): a percentage discount applied to the subtotal.",
+    "Add setTax(cart, pct) and total(cart): total is the discounted subtotal plus tax computed on that discounted amount.",
+    "Add receipt(cart): a human-readable breakdown string of the cart."
   ]
 }

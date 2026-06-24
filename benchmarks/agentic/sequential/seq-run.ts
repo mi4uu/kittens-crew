@@ -53,6 +53,7 @@ async function runArm(arm: any) {
   const work = join(HERE, ".work", arm.name);
   rmSync(work, { recursive: true, force: true });
   cpSync(join(HERE, tasksCfg.repoDir), work, { recursive: true });
+  rmSync(join(work, tasksCfg.hiddenGate || "gate"), { recursive: true, force: true }); // hide the gate from the agent
   await $`git -C ${work} init -q && git -C ${work} add -A && git -C ${work} -c user.email=b@b -c user.name=b commit -q -m base`.quiet();
   const appendPath = expand(arm.appendFile);
   let sys = appendPath ? readFileSync(appendPath, "utf8") : "";
@@ -63,9 +64,8 @@ async function runArm(arm: any) {
   const perTask: any[] = [];
   for (let i = 0; i < TASKS.length; i++) {
     const prompt =
-      "You are working in this git repository across a SERIES of tasks; earlier work must keep passing. " +
-      (useRtk ? "`rtk` is installed — wrap commands with verbose output in it (`rtk bun test`). " : "") +
-      "Implement by EDITING FILES, run the tests, stop when done.\n\nTask " + (i + 1) + ": " + TASKS[i];
+      (useRtk ? "`rtk` is on PATH — wrap commands with verbose output in it (`rtk bun test`). " : "") +
+      "Implement by editing files, run the tests, stop when done.\n\nTask " + (i + 1) + ": " + TASKS[i];
     const args = ["-p", prompt, "--model", cfg.model, "--dangerously-skip-permissions", "--output-format", "json", "--max-turns", "50"];
     if (sys) args.push("--append-system-prompt", sys);
     const t0 = Date.now();
@@ -82,7 +82,19 @@ async function runArm(arm: any) {
     console.log(`  ${arm.name} T${i + 1}: pass ${pass}  cumTok ${Math.round(tokens)}  ${pass < prevPass ? "REGRESSED " + (prevPass - pass) : ""}`);
     prevPass = pass;
   }
-  return { arm: arm.name, totalTokens: Math.round(tokens), totalSec: Math.round(sec), regressions, finalPass: prevPass, rtk: useRtk, perTask };
+  // HIDDEN GATE — never shown during the run. The real integer-cents invariant on
+  // tricky rounding values. A float impl passes the visible suite but fails here;
+  // an agent that recorded the invariant (SPEC §V) and rounded throughout passes.
+  let gate = { pass: 0, fail: 0 };
+  const gateFile = join(HERE, tasksCfg.repoDir, tasksCfg.hiddenGate || "gate", "gate.test.ts");
+  if (existsSync(gateFile)) {
+    cpSync(gateFile, join(work, "test", "gate.test.ts"));
+    const out = await $`bun test test/gate.test.ts`.cwd(work).quiet().nothrow().then((r) => r.stdout.toString() + r.stderr.toString());
+    const mp = out.match(/(\d+)\s+pass/), mf = out.match(/(\d+)\s+fail/);
+    gate = { pass: mp ? +mp[1] : 0, fail: mf ? +mf[1] : 0 };
+    console.log(`  ${arm.name} HIDDEN GATE: ${gate.pass} pass / ${gate.fail} fail`);
+  }
+  return { arm: arm.name, totalTokens: Math.round(tokens), totalSec: Math.round(sec), regressions, finalPass: prevPass, hiddenGate: gate, rtk: useRtk, perTask };
 }
 
 const results: any[] = [];

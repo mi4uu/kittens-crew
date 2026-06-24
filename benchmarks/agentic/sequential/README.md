@@ -43,7 +43,28 @@ cd benchmarks/agentic/sequential && bun seq-run.ts
   the kittens arm still runs (and, per its persona, occasionally notes it's
   leaving tokens on the table).
 
-## results (Sonnet, n=1) — and they are not flattering
+## ⚠️ design fixed — old results below are SUPERSEDED
+
+The first version was methodologically broken (caught in review): the **full test
+suite was visible up front** and every task spoon-fed the agent (*"money stays
+integer cents"*, *"do not break T1/T2"*) — which **removes the very thing the bench
+claims to measure**. With the invariant handed over every task and a visible suite,
+no planning or memory is needed: run tests, fix red. A spec/§V pipeline can't show
+value because the test does its job for it.
+
+The redesign (now in `tasks.json` / `target/`):
+- the integer-cents invariant is stated **once**, in task 1 — never repeated, no
+  *"don't break X"* reminders;
+- the **visible** suite (`test/`) only checks feature behaviour on clean numbers;
+- the real invariant lives in a **hidden gate** (`gate/`) the agent never sees,
+  run only at the end on tricky rounding values a float impl fails.
+
+So a memoryless agent passes the visible tests but **fails the hidden gate**; one
+that recorded the invariant and rounded throughout passes it. A re-run with this
+design (and rtk now installed) is pending. The numbers below are from the OLD,
+flawed design — kept for honesty, not as a result.
+
+## results (Sonnet, n=1) — OLD/FLAWED DESIGN, superseded above
 
 | arm | tests pass | regressions | total tokens (4 tasks) | vs baseline |
 |---|---:|---:|---:|---:|
