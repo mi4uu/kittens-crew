@@ -1062,6 +1062,54 @@ value = 4
 difficulty = 2
 risk = 1
 
+[[task]]
+id = "T57"
+status = "todo"
+task = "PLAN-GATE (no plan → no work): the membrane enforces plan-first. UserPromptSubmit: casual chatter (⊥ commands, user just says what they want) → cats LISTEN, intake distills intent → DRAFT plan (`spec apply`), ⊥ build directly like a chat window. Stop/PreToolUse: if no plan exists for the active work → block build, route to planning. Even if the user ⊥ asks, build the plan in the background + inform. Benchmark run#1 proof: kittens on Haiku built feedcat with ZERO plan/spec (never ran spec skill), cost 3.12M tok > baseline 2.66M — nothing forced plan-first"
+deps = [
+    "T51",
+    "T52",
+]
+priority = 0
+cites = [
+    "V33",
+    "V34",
+]
+scope = []
+note = ""
+value = 5
+difficulty = 4
+risk = 3
+
+[[task]]
+id = "T58"
+status = "todo"
+task = "cat-roster deliberation→plan flow: advisor cat chats/advises → planner cats process user intent into a structured plan (`spec apply`), dopytują if unclear, propose + ask 'git?' → on yes SAVE plan → orchestrator proposes best start task + asks (⊥ auto-apply, V27) → loop. Roles assigned by our code from task type (`kitty for_task`); small-brain models get the plan pre-divided into small pieces they can handle, then we check (check done). ⊥ everything through one big AI call"
+deps = ["T55"]
+priority = 0
+cites = [
+    "V27",
+    "V33",
+]
+scope = []
+note = ""
+value = 4
+difficulty = 4
+risk = 3
+
+[[task]]
+id = "T59"
+status = "todo"
+task = "cheap cat-voice subagent: when the engine must speak AS a cat but has no canned message, spawn a minimal-context subagent on the CHEAPEST model — it only has to voice to the user what our code already understands (a task + scope + deps as plain text). Separate context = cheap + isolated; clear instructions, may itself spawn subagents. Prefer pure-code messages; subagent only for the fuzzy 'say it nicely' bits"
+deps = ["T52"]
+priority = 0
+cites = ["V33"]
+scope = []
+note = ""
+value = 3
+difficulty = 3
+risk = 2
+
 [[bug]]
 id = "B1"
 date = "2026-06-24"
