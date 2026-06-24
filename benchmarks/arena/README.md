@@ -19,7 +19,15 @@ time into a fresh mounted `~/.claude`. So:
 - **kittens** self-installs from nothing in-container (`install.sh` cargo-builds
   kittenscrew, installs squeez, drops the plugin, wires the membrane) — which also
   exercises the real install path.
-- comparison arms (cavekit, ponytail) likewise start from nothing.
+- **cavekit** (v4) installs from GitHub in-container: `npx skills add
+  JuliusBrussee/cavekit` (markdown skills), git-clone fallback.
+- **ponytail** installs from the Claude Code marketplace in-container: `claude
+  plugin marketplace add DietrichGebert/ponytail` + `claude plugin install`.
+
+Auth is the SAME token for every arm, supplied via `.env` (env), never written
+into a skillset — so each arm's `~/.claude` is a clean config dir with no session
+history or other artifacts carried in. cavekit/ponytail clone from GitHub and
+never see `/repo` either.
 
 Each arm runs in its own throwaway container against its OWN copy of the project,
 so arms never see each other's work. `--dangerously-skip-permissions` is set

@@ -32,9 +32,13 @@ if command -v kittenscrew >/dev/null 2>&1; then
   say "kittenscrew already on PATH ($(command -v kittenscrew))"
 elif [ "$BUILD" = 1 ]; then
   say "building kittenscrew (cargo --release)…"
-  ( cd "$REPO/kittenscrew" && cargo build --release )
+  # Build in a writable temp so the repo can be mounted read-only (Docker arm).
+  BTMP="$(mktemp -d)"
+  cp -r "$REPO/kittenscrew" "$BTMP/k"
+  ( cd "$BTMP/k" && cargo build --release )
   mkdir -p "$HOME/.local/bin"
-  install -m755 "$REPO/kittenscrew/target/release/kittenscrew" "$HOME/.local/bin/kittenscrew"
+  install -m755 "$BTMP/k/target/release/kittenscrew" "$HOME/.local/bin/kittenscrew"
+  rm -rf "$BTMP"
   export PATH="$HOME/.local/bin:$PATH"
   say "installed kittenscrew → $HOME/.local/bin"
 else
@@ -46,7 +50,7 @@ if command -v squeez >/dev/null 2>&1 || [ -x "$CLAUDE_DIR/squeez/bin/squeez" ]; 
   say "squeez present"
 else
   say "installing squeez…"
-  curl -fsSL https://raw.githubusercontent.com/KRLabsOrg/squeez/main/install.sh | sh \
+  curl -fsSL https://raw.githubusercontent.com/claudioemmanuel/squeez/main/install.sh | sh \
     || say "WARN: squeez install failed — compression hooks degrade gracefully (V2)"
 fi
 
