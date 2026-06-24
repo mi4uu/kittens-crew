@@ -22,6 +22,9 @@ IMAGE="arena:latest"
 STATE="$HERE/state"
 SESSION="cc"
 ENV_FILE="$HERE/.env"   # ANTHROPIC_API_KEY=… (+ ANTHROPIC_BASE_URL=… for a proxy)
+MODEL="${ARENA_MODEL:-haiku}"   # SAME model for every arm (fairness). Thesis is
+                                # sharpest on a small model: does kittens-crew make
+                                # it viable where the bare model flails?
 
 cname() { echo "arena-$1"; }
 need_env() { [ -f "$ENV_FILE" ] || { echo "missing $ENV_FILE (copy .env.example)"; exit 1; }; }
@@ -102,7 +105,7 @@ JSON'
   date +%s > "$STATE/$arm/started_at"   # wall-time clock (rubric: time spent)
   # start claude INTERACTIVELY in a detached tmux session.
   docker exec -d "$c" tmux new-session -d -s "$SESSION" -x 220 -y 50 \
-    'cd /work && claude --dangerously-skip-permissions; exec bash'
+    "cd /work && claude --model $MODEL --dangerously-skip-permissions; exec bash"
   # First-launch dialogs (theme is pre-seeded away): trust-folder → Enter;
   # bypass-permissions warning → Down, Enter. Deterministic on first run; an
   # empty Enter on the main prompt is harmless if a dialog isn't shown.
@@ -127,6 +130,21 @@ cmd_report() {
 cmd_send() { docker exec "$(cname "$1")" tmux send-keys -t "$SESSION" -- "$2"; docker exec "$(cname "$1")" tmux send-keys -t "$SESSION" Enter; }
 cmd_keys() { docker exec "$(cname "$1")" tmux send-keys -t "$SESSION" "$2"; }
 cmd_peek() { docker exec "$(cname "$1")" tmux capture-pane -t "$SESSION" -p | sed 's/\x1b\[[0-9;]*m//g' | tail -n "${2:-60}"; }
+# Context-window size per assistant turn = input + cache_creation + cache_read
+# (the full prompt the model saw). Reports avg + peak across the run — the thesis
+# metric: kittens-crew should hold context small via targeted injection.
+cmd_context() {
+  local arm="$1"
+  local dir="$STATE/$arm/claude/projects"
+  [ -d "$dir" ] || { echo "$arm: no session yet"; return; }
+  find "$dir" -name '*.jsonl' -exec cat {} + 2>/dev/null \
+    | jq -rc 'select(.message.usage) | .message.usage
+              | (.input_tokens + (.cache_creation_input_tokens // 0) + (.cache_read_input_tokens // 0))' 2>/dev/null \
+    | awk -v arm="$arm" '{s+=$1; n++; if($1>mx)mx=$1}
+        END{ if(n>0) printf "%-9s turns=%-4d avg_ctx=%-7d peak_ctx=%d\n", arm, n, s/n, mx;
+             else printf "%-9s no turns yet\n", arm }'
+}
+
 cmd_artifacts() { docker cp "$(cname "$1"):/work/." "$2"; echo "copied /work → $2"; }
 cmd_down() { docker rm -f "$(cname "$1")" >/dev/null 2>&1 && echo "down: $1"; }
 cmd_ls() { docker ps --filter "name=arena-" --format '{{.Names}}\t{{.Status}}'; }
@@ -139,6 +157,7 @@ case "$sub" in
   keys) cmd_keys "$@" ;;
   peek) cmd_peek "$@" ;;
   report) cmd_report "$@" ;;
+  context) if [ $# -gt 0 ]; then cmd_context "$1"; else for a in baseline kittens cavekit ponytail; do cmd_context "$a"; done; fi ;;
   artifacts) cmd_artifacts "$@" ;;
   down) cmd_down "$@" ;;
   ls) cmd_ls ;;
