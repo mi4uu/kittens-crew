@@ -7,16 +7,23 @@ with tests"). Four arms, each in its own disposable container with a clean
 
 ## Quantitative scorecard
 
-| arm | build | tests | code (LOC) | wall | ctx avg | ctx peak | turns |
-|-----|-------|-------|-----------|------|---------|----------|-------|
-| baseline | ✅ PASS | 4 passed | 351 | ~655s | 33 857 | 41 172 | 78 |
-| kittens  | ✅ PASS | 7 passed | 565 | ~600s | 36 784 | 45 549 | 84 |
-| ponytail | ✅ PASS | 9 passed | 544 | ~626s | 38 974 | 47 440 | 69 |
-| cavekit  | ✅ PASS | 7 passed | 577 | ~642s | 43 739 | 56 330 | 117 |
+A **turn** = one assistant API response (one model generation). **Total tokens** =
+the real cost: input(uncached) + cache-creation + cache-read + output, summed over
+every turn — dominated by cache-read (≈ context × turns). **LOC** = Rust code incl.
+inline `#[cfg(test)]` tests (no separate test files; no markdown docs landed in the
+project dir — the "README included" claims were hollow).
 
-context = `input + cache_creation + cache_read` per assistant turn (the full prompt
-the model saw); avg + peak across the run. wall ≈ from arm-up to harvest (rough —
-includes provisioning).
+| arm | build | tests | LOC | turns | ctx avg | ctx peak | **TOTAL tokens** |
+|-----|-------|-------|-----|-------|---------|----------|------------------|
+| baseline | ✅ | 4 | 388 | 78 | 33 857 | 41 172 | **2.66 M** |
+| ponytail | ✅ | 9 | 629 | 69 | 38 974 | 47 440 | **2.72 M** |
+| kittens  | ✅ | 7 | 635 | 84 | 36 784 | 45 549 | **3.12 M** |
+| cavekit  | ✅ | 7 | 647 | 129 | 43 739 | 56 330 | **5.86 M** |
+
+**Cost = context-per-turn × turns.** kittens burned MORE than baseline (3.12M vs
+2.66M); cavekit 2.2× baseline. A trivial feed reader cost 2.7–5.9 **million**
+tokens — the cache-read tax of a long agentic loop. Simplified per-arm stories:
+`results/<arm>-story.txt`.
 
 ## Honest findings (measured, not assumed)
 
@@ -42,6 +49,19 @@ includes provisioning).
    in `feedcat/` and the first harvest ran `cargo build` at `/work`. Verifying
    the actual error (not trusting the PASS/FAIL) caught it. (Meta-lesson the
    benchmark is about: verify delivery, don't trust the claim.)
+
+## The big finding: kittens-crew behaved like a chat window
+The arm with our skillset **never made a plan or a spec** — it read the brief,
+asked a couple of questions, and built directly, exactly like baseline. The
+membrane was wired (config + 8 hooks present), but **nothing enforces plan-first**.
+That's the gap: a weak model left to free-build burns tokens wandering (kittens
+3.12M > baseline 2.66M) and overclaims ("ready for daily use", hollow README).
+The fix — captured as spec tasks T57–T59 — is **"no plan → no work"**: casual
+chatter is distilled into a draft plan the user confirms; building is gated on a
+saved plan; small-brained models get the work pre-divided into pieces they can
+handle, then the gates (`check done`) verify. Cheap cat-voice subagents (separate
+tiny context, cheapest model) handle the "say it nicely" bits. Run starting from
+`/spec` / a forced plan would likely tell a very different story — that's run #2.
 
 ## Caveats
 One task × one model × one run (no repeats). Quantitative only — the qualitative

@@ -147,6 +147,15 @@ cmd_context() {
 
 cmd_artifacts() { docker cp "$(cname "$1"):/work/." "$2"; echo "copied /work → $2"; }
 cmd_down() { docker rm -f "$(cname "$1")" >/dev/null 2>&1 && echo "down: $1"; }
+
+# Auto-cleanup after analysis: tear down every container + drop the per-arm
+# ~/.claude configs and work copies (state/), but KEEP results/ (the harvested
+# code + transcripts + stories). The result code we want; the claude config we don't.
+cmd_clean() {
+  for a in baseline kittens cavekit ponytail; do docker rm -f "$(cname "$a")" >/dev/null 2>&1; done
+  rm -rf "$STATE"
+  echo "cleaned: containers down, state/ (configs+work copies) removed. results/ kept."
+}
 cmd_ls() { docker ps --filter "name=arena-" --format '{{.Names}}\t{{.Status}}'; }
 
 sub="${1:-}"; shift || true
@@ -160,6 +169,7 @@ case "$sub" in
   context) if [ $# -gt 0 ]; then cmd_context "$1"; else for a in baseline kittens cavekit ponytail; do cmd_context "$a"; done; fi ;;
   artifacts) cmd_artifacts "$@" ;;
   down) cmd_down "$@" ;;
+  clean) cmd_clean ;;
   ls) cmd_ls ;;
   *) sed -n '2,30p' "$0"; exit 0 ;;
 esac
