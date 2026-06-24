@@ -68,6 +68,52 @@ pub struct Task {
     /// Ladder-kill reason when status = Killed (projected into §T cites cell).
     #[serde(default)]
     pub note: String,
+    /// 1-5 contribution to §G/§V (T39, authored @ creation). 0 = unscored. toml-only.
+    #[serde(default)]
+    pub value: i64,
+    /// 1-5 effort/complexity (T39). 0 = unscored. toml-only.
+    #[serde(default)]
+    pub difficulty: i64,
+    /// 1-5 chance of rework/przypał (T39). 0 = none. toml-only.
+    #[serde(default)]
+    pub risk: i64,
+    /// Self-eval filled @ done (T39, feeds value-variance V25). toml-only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eval: Option<TaskEval>,
+}
+
+/// Completion self-eval (V23/V25). Present only after a task is done.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskEval {
+    /// 1-5 how happy with the delivered work.
+    pub satisfaction: i64,
+    /// 1-5 match to what the plan assumed.
+    pub conformance: i64,
+    /// Actual output tokens spent (0 = unrecorded).
+    #[serde(default)]
+    pub tokens: i64,
+    /// Why it diverged, if it did.
+    #[serde(default)]
+    pub note: String,
+}
+
+impl Default for Task {
+    fn default() -> Self {
+        Task {
+            id: String::new(),
+            status: Status::Todo,
+            task: String::new(),
+            deps: Vec::new(),
+            priority: default_priority(),
+            cites: Vec::new(),
+            scope: Vec::new(),
+            note: String::new(),
+            value: 0,
+            difficulty: 0,
+            risk: 0,
+            eval: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -183,6 +229,7 @@ mod tests {
                     cites: vec!["§I".into()],
                     scope: vec!["src/spec.rs".into()],
                     note: String::new(),
+                    ..Default::default()
                 },
                 Task {
                     id: "T10".into(),
@@ -193,6 +240,7 @@ mod tests {
                     cites: vec!["V3".into()],
                     scope: vec![],
                     note: String::new(),
+                    ..Default::default()
                 },
             ],
             bugs: vec![Bug {

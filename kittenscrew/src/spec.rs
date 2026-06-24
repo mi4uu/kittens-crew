@@ -146,6 +146,7 @@ fn parse_tasks(lines: &[&str]) -> Result<Vec<Task>, SpecError> {
             cites,
             scope: Vec::new(),
             note,
+            ..Default::default()
         });
     }
     Ok(out)
@@ -424,6 +425,149 @@ fn find_cycle(s: &Store) -> Option<Vec<String>> {
     None
 }
 
+// ---- apply (T10) ----------------------------------------------------------
+
+/// A structured spec diff supplied by the caller (LLM). kittenscrew never
+/// parses freeform prose intent — the caller hands us structure; we
+/// validate+write+order (§I, V3). Ops are §T task-lifecycle only.
+#[derive(Debug, serde::Deserialize)]
+pub struct Diff {
+    pub section: String,
+    pub op: String,
+    #[serde(default)]
+    pub payload: serde_json::Value,
+}
+
+/// Apply one diff to the store in place. Returns Err on a malformed diff
+/// (unknown section/op, missing/duplicate id). This only mutates — §V *rule*
+/// validation is the caller's separate `validate` gate (V3).
+pub fn apply(store: &mut Store, diff: &Diff) -> Result<(), String> {
+    let sec = diff.section.trim_start_matches('§');
+    if sec != "T" {
+        return Err(format!("unsupported section §{sec} (only §T)"));
+    }
+    match diff.op.as_str() {
+        "add" => apply_add(store, &diff.payload),
+        "edit" => apply_edit(store, &diff.payload),
+        "kill" => apply_status(store, &diff.payload, Status::Killed),
+        "done" => apply_status(store, &diff.payload, Status::Done),
+        other => Err(format!("unknown op '{other}' (add|edit|kill|done)")),
+    }
+}
+
+fn pstr(p: &serde_json::Value, key: &str) -> Option<String> {
+    p.get(key).and_then(|v| v.as_str()).map(str::to_string)
+}
+
+fn pvec(p: &serde_json::Value, key: &str) -> Option<Vec<String>> {
+    p.get(key).map(|v| {
+        v.as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
+fn pint(p: &serde_json::Value, key: &str) -> Option<i64> {
+    p.get(key).and_then(|v| v.as_i64())
+}
+
+/// Next free `T<n>` id (max numeric suffix + 1).
+fn next_task_id(store: &Store) -> String {
+    let max = store
+        .tasks
+        .iter()
+        .filter_map(|t| t.id.strip_prefix('T').and_then(|n| n.parse::<u32>().ok()))
+        .max()
+        .unwrap_or(0);
+    format!("T{}", max + 1)
+}
+
+fn apply_add(store: &mut Store, p: &serde_json::Value) -> Result<(), String> {
+    let task = pstr(p, "task").ok_or("add: payload.task required")?;
+    let id = match pstr(p, "id") {
+        Some(id) => {
+            if store.tasks.iter().any(|t| t.id == id) {
+                return Err(format!("add: id {id} already exists"));
+            }
+            id
+        }
+        None => next_task_id(store),
+    };
+    store.tasks.push(Task {
+        id,
+        status: Status::Todo,
+        task,
+        deps: pvec(p, "deps").unwrap_or_default(),
+        priority: p.get("priority").and_then(|v| v.as_i64()).unwrap_or(0),
+        cites: pvec(p, "cites").unwrap_or_default(),
+        scope: pvec(p, "scope").unwrap_or_default(),
+        note: pstr(p, "note").unwrap_or_default(),
+        value: pint(p, "value").unwrap_or(0),
+        difficulty: pint(p, "difficulty").unwrap_or(0),
+        risk: pint(p, "risk").unwrap_or(0),
+        ..Default::default()
+    });
+    Ok(())
+}
+
+fn task_mut<'a>(store: &'a mut Store, p: &serde_json::Value) -> Result<&'a mut Task, String> {
+    let id = pstr(p, "id").ok_or("payload.id required")?;
+    store
+        .tasks
+        .iter_mut()
+        .find(|t| t.id == id)
+        .ok_or_else(|| format!("unknown task {id}"))
+}
+
+fn apply_edit(store: &mut Store, p: &serde_json::Value) -> Result<(), String> {
+    let t = task_mut(store, p)?;
+    // Only provided fields change; absent fields stay. Status unchanged via edit
+    // (use kill/done for lifecycle).
+    if let Some(task) = pstr(p, "task") {
+        t.task = task;
+    }
+    if let Some(deps) = pvec(p, "deps") {
+        t.deps = deps;
+    }
+    if let Some(cites) = pvec(p, "cites") {
+        t.cites = cites;
+    }
+    if let Some(scope) = pvec(p, "scope") {
+        t.scope = scope;
+    }
+    if let Some(note) = pstr(p, "note") {
+        t.note = note;
+    }
+    if let Some(pri) = pint(p, "priority") {
+        t.priority = pri;
+    }
+    if let Some(v) = pint(p, "value") {
+        t.value = v;
+    }
+    if let Some(d) = pint(p, "difficulty") {
+        t.difficulty = d;
+    }
+    if let Some(r) = pint(p, "risk") {
+        t.risk = r;
+    }
+    Ok(())
+}
+
+fn apply_status(store: &mut Store, p: &serde_json::Value, status: Status) -> Result<(), String> {
+    let t = task_mut(store, p)?;
+    t.status = status;
+    if status == Status::Killed {
+        if let Some(note) = pstr(p, "note") {
+            t.note = note;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -588,5 +732,100 @@ T3|∅|custom cache|-|-   (ladder: stdlib covers it)\n\n\
         assert!(t.starts_with("## §T"));
         assert!(t.contains("T1|x|"));
         assert!(!t.contains("## §B"));
+    }
+
+    // ---- apply (T10) ----
+
+    fn diff(json: &str) -> Diff {
+        serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn apply_add_assigns_next_id() {
+        let mut s = import(SAMPLE).unwrap(); // T1..T3
+        apply(&mut s, &diff(r#"{"section":"§T","op":"add","payload":{"task":"new","deps":["T1"],"cites":["V1"]}}"#)).unwrap();
+        let t = s.task("T4").unwrap();
+        assert_eq!(t.task, "new");
+        assert_eq!(t.status, Status::Todo);
+        assert_eq!(t.deps, vec!["T1".to_string()]);
+        assert!(validate(&s).is_empty());
+    }
+
+    #[test]
+    fn apply_add_explicit_duplicate_id_errors() {
+        let mut s = import(SAMPLE).unwrap();
+        let e = apply(
+            &mut s,
+            &diff(r#"{"section":"§T","op":"add","payload":{"id":"T1","task":"x"}}"#),
+        )
+        .unwrap_err();
+        assert!(e.contains("already exists"));
+    }
+
+    #[test]
+    fn apply_done_and_kill_change_status() {
+        let mut s = import(SAMPLE).unwrap();
+        apply(
+            &mut s,
+            &diff(r#"{"section":"§T","op":"done","payload":{"id":"T2"}}"#),
+        )
+        .unwrap();
+        assert_eq!(s.task("T2").unwrap().status, Status::Done);
+        apply(
+            &mut s,
+            &diff(r#"{"section":"§T","op":"kill","payload":{"id":"T2","note":"superseded"}}"#),
+        )
+        .unwrap();
+        assert_eq!(s.task("T2").unwrap().status, Status::Killed);
+        assert_eq!(s.task("T2").unwrap().note, "superseded");
+    }
+
+    #[test]
+    fn apply_edit_changes_only_given_fields() {
+        let mut s = import(SAMPLE).unwrap();
+        let before = s.task("T2").unwrap().status;
+        apply(
+            &mut s,
+            &diff(r#"{"section":"§T","op":"edit","payload":{"id":"T2","cites":["V2"]}}"#),
+        )
+        .unwrap();
+        let t = s.task("T2").unwrap();
+        assert_eq!(t.cites, vec!["V2".to_string()]);
+        assert_eq!(t.task, "impl auth"); // untouched
+        assert_eq!(t.status, before); // edit never flips lifecycle
+    }
+
+    #[test]
+    fn apply_rejects_unknown_section_and_op() {
+        let mut s = import(SAMPLE).unwrap();
+        assert!(apply(&mut s, &diff(r#"{"section":"§V","op":"add","payload":{}}"#)).is_err());
+        assert!(apply(
+            &mut s,
+            &diff(r#"{"section":"§T","op":"frobnicate","payload":{}}"#)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn apply_edit_unknown_id_errors() {
+        let mut s = import(SAMPLE).unwrap();
+        assert!(apply(
+            &mut s,
+            &diff(r#"{"section":"§T","op":"edit","payload":{"id":"T999","task":"x"}}"#)
+        )
+        .unwrap_err()
+        .contains("unknown task T999"));
+    }
+
+    #[test]
+    fn apply_then_validate_catches_bad_dep() {
+        // apply succeeds structurally; the §V gate (validate) is what rejects.
+        let mut s = import(SAMPLE).unwrap();
+        apply(
+            &mut s,
+            &diff(r#"{"section":"§T","op":"add","payload":{"task":"x","deps":["T999"]}}"#),
+        )
+        .unwrap();
+        assert!(validate(&s).iter().any(|v| v.contains("missing task T999")));
     }
 }

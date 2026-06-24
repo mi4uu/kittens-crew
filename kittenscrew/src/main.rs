@@ -7,6 +7,8 @@ use clap::{Parser, Subcommand};
 use std::io::{Read, Write};
 use std::process::{Command, ExitCode, Stdio};
 
+mod check;
+mod drift;
 mod plan;
 mod spec;
 mod store;
@@ -35,6 +37,11 @@ enum Cmd {
     Plan {
         #[command(subcommand)]
         action: PlanAction,
+    },
+    /// Cyclic done-eval (T30): fake-delivery scan + cited-§V integrity, demote on fail.
+    Check {
+        #[command(subcommand)]
+        action: CheckAction,
     },
     /// Hook orchestration (T5-T8). Reads JSON from stdin (Claude Code hook contract).
     Hook {
@@ -68,7 +75,7 @@ enum SpecAction {
         #[arg(long)]
         plain: bool,
     },
-    /// Apply diff to SPEC.md (validates vs §V rules). T10 pending.
+    /// Apply structured JSON diff(s) from stdin (validates vs §V; exit 2 + unchanged on violation).
     Apply,
     /// Structural validation: deps/cites resolve, ids unique, no cycle.
     Check,
@@ -76,6 +83,18 @@ enum SpecAction {
     Import,
     /// Regenerate SPEC.md from the store (projection).
     Render,
+    /// Drift reconcile (T29): diff edited SPEC.md vs store; `--apply` reconciles structural + re-renders.
+    Drift {
+        /// Reconcile structural task changes into the store + re-render (else dry-run report).
+        #[arg(long)]
+        apply: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum CheckAction {
+    /// Re-verify every `x` task; demote `x`→`~` on fake-delivery or broken cites.
+    Done,
 }
 
 #[derive(Subcommand, Debug)]
@@ -101,8 +120,10 @@ enum PlanAction {
         /// Goal task id. Optional → longest chain in the DAG.
         goal: Option<String>,
     },
-    /// Frontier choices, each with {scope, unblocks, blocks}, ranked by leverage.
+    /// Frontier choices, each with {scope, unblocks, blocks, worth, rank}, ranked by worth.
     Alternatives,
+    /// All tasks scored by worth/rank (value-weighted, V22/V24), highest first.
+    Worth,
     /// Mark task done (store → re-render SPEC.md projection).
     Done {
         /// Task id (e.g. T5).
@@ -129,6 +150,7 @@ fn run(cli: Cli) -> Result<(), KittenError> {
         },
         Cmd::Spec { action } => spec_cmd(action),
         Cmd::Plan { action } => plan_cmd(action),
+        Cmd::Check { action } => check_cmd(action),
         Cmd::Hook { event } => hook::dispatch(&event),
         Cmd::Init => init_stub(),
     }
@@ -170,7 +192,49 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             Ok(())
         }
         SpecAction::Apply => {
-            eprintln!("spec apply: not implemented yet (T10 pending)");
+            let store_path = Path::new(store::STORE_PATH);
+            let mut s = store::Store::load(store_path)?;
+            let mut input = String::new();
+            std::io::stdin().read_to_string(&mut input)?;
+            // Accept a single diff object or an array of diffs (batch).
+            let trimmed = input.trim();
+            let diffs: Vec<spec::Diff> = if trimmed.starts_with('[') {
+                serde_json::from_str(trimmed)
+                    .map_err(|e| KittenError::Validation(format!("bad diff JSON: {e}")))?
+            } else {
+                vec![serde_json::from_str(trimmed)
+                    .map_err(|e| KittenError::Validation(format!("bad diff JSON: {e}")))?]
+            };
+            for d in &diffs {
+                spec::apply(&mut s, d).map_err(KittenError::Validation)?;
+            }
+            // V3: never write a spec that breaks a structural §V rule.
+            let violations = spec::validate(&s);
+            let k = kitty::lookup("planning").expect("planning kitty");
+            if !violations.is_empty() {
+                for v in &violations {
+                    eprintln!("{} [{}] {}", k.emoji, k.name, v);
+                }
+                // Return the rejected diff to the caller (LLM) to fix + resubmit.
+                eprintln!(
+                    "{} [{}] diff rejected — SPEC.md unchanged:",
+                    k.emoji, k.name
+                );
+                println!("{trimmed}");
+                return Err(KittenError::Validation(format!(
+                    "{} §V violation(s) — not written",
+                    violations.len()
+                )));
+            }
+            s.save(store_path)?;
+            std::fs::write(SPEC_PATH, spec::render(&s))?;
+            println!(
+                "{} [{}] applied {} diff(s) → SPEC.md ({} tasks)",
+                k.emoji,
+                k.name,
+                diffs.len(),
+                s.tasks.len()
+            );
             Ok(())
         }
         SpecAction::Check => {
@@ -216,6 +280,55 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             std::fs::write(SPEC_PATH, spec::render(&s))?;
             let k = kitty::lookup("planning").expect("planning kitty");
             println!("{} [{}] rendered {} from store", k.emoji, k.name, SPEC_PATH);
+            Ok(())
+        }
+        SpecAction::Drift { apply } => {
+            let store_path = Path::new(store::STORE_PATH);
+            let current = store::Store::load(store_path)?;
+            let incoming = spec::import(&std::fs::read_to_string(SPEC_PATH)?)?;
+            let d = drift::diff(&current, &incoming);
+            let k = kitty::lookup("entropy").expect("entropy kitty");
+
+            if d.is_empty() {
+                println!("{} [{}] no drift — SPEC.md ≡ store", k.emoji, k.name);
+                return Ok(());
+            }
+            // Structured summary (V16): structural auto-reconcilable, prose escalates.
+            println!("{}", serde_json::to_string_pretty(&d).unwrap());
+            if !d.prose_changed.is_empty() {
+                println!(
+                    "{} [{}] prose drift in {} → review (adopted from SPEC.md, not silent)",
+                    k.emoji,
+                    k.name,
+                    d.prose_changed.join(",")
+                );
+            }
+            if !apply {
+                println!(
+                    "{} [{}] dry-run — rerun w/ --apply to reconcile",
+                    k.emoji, k.name
+                );
+                return Ok(());
+            }
+            let merged = drift::reconcile(&current, &incoming);
+            let violations = spec::validate(&merged);
+            if !violations.is_empty() {
+                for v in &violations {
+                    eprintln!("{} [{}] {}", k.emoji, k.name, v);
+                }
+                return Err(KittenError::Validation(format!(
+                    "{} §V violation(s) — store unchanged",
+                    violations.len()
+                )));
+            }
+            merged.save(store_path)?;
+            std::fs::write(SPEC_PATH, spec::render(&merged))?;
+            println!(
+                "{} [{}] reconciled → store + SPEC.md re-rendered ({} task change(s))",
+                k.emoji,
+                k.name,
+                d.task_added.len() + d.task_removed.len() + d.task_changed.len()
+            );
             Ok(())
         }
     }
@@ -268,6 +381,11 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
             println!("{}", serde_json::to_string_pretty(&a).unwrap());
             Ok(())
         }
+        PlanAction::Worth => {
+            let rows = plan::worth_ranking(&s);
+            println!("{}", serde_json::to_string_pretty(&rows).unwrap());
+            Ok(())
+        }
         PlanAction::Done { id } => {
             let mut s = s;
             let t = s
@@ -281,6 +399,66 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
             let k = kitty::lookup("builder").expect("builder kitty");
             println!("{} [{}] {id} → done; SPEC.md re-rendered", k.emoji, k.name);
             Ok(())
+        }
+    }
+}
+
+fn check_cmd(action: CheckAction) -> Result<(), KittenError> {
+    use std::path::Path;
+    match action {
+        CheckAction::Done => {
+            let store_path = Path::new(store::STORE_PATH);
+            let mut s = store::Store::load(store_path)?;
+            let reports = check::check_done(&s);
+            let k = kitty::lookup("entropy").expect("entropy kitty");
+
+            // V19: a sealed `x` going red is the regression alarm — demote + report, never silent.
+            let failed: Vec<&check::TaskReport> = reports.iter().filter(|r| !r.ok).collect();
+            for r in &reports {
+                if r.ok {
+                    println!("{} [{}] {} ok", k.emoji, k.name, r.id);
+                } else {
+                    println!(
+                        "{} [{}] {} FAIL → demote x→~ ({} marker(s), broken cites: {})",
+                        k.emoji,
+                        k.name,
+                        r.id,
+                        r.markers.len(),
+                        if r.broken_cites.is_empty() {
+                            "-".into()
+                        } else {
+                            r.broken_cites.join(",")
+                        }
+                    );
+                    for m in &r.markers {
+                        println!("    {}:{} [{}] {}", m.file, m.line, m.kind, m.text);
+                    }
+                }
+            }
+
+            if failed.is_empty() {
+                println!(
+                    "{} [{}] all {} done task(s) verified — no fake delivery",
+                    k.emoji,
+                    k.name,
+                    reports.len()
+                );
+                return Ok(());
+            }
+
+            let demote: Vec<String> = failed.iter().map(|r| r.id.clone()).collect();
+            for t in s.tasks.iter_mut() {
+                if demote.contains(&t.id) {
+                    t.status = store::Status::Wip;
+                }
+            }
+            s.save(store_path)?;
+            std::fs::write(SPEC_PATH, spec::render(&s))?;
+            Err(KittenError::Validation(format!(
+                "{} task(s) demoted x→~: {}",
+                demote.len(),
+                demote.join(",")
+            )))
         }
     }
 }

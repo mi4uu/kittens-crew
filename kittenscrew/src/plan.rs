@@ -25,6 +25,115 @@ fn is_open(t: &Task) -> bool {
     matches!(t.status, Status::Todo | Status::Wip)
 }
 
+// ---- worth / ranking (T40, V22/V24) ---------------------------------------
+// Defaults; become `[plan]` config knobs in T41.
+const GAMMA: f64 = 0.85; // forward discount γ
+const PORTFOLIO_W: f64 = 0.30; // hybrid: max(children) + PORTFOLIO_W·Σ(children)
+
+/// `worth` per task (V24): `worth = value + γ·forward`, where
+/// `forward = max(worth children) + PORTFOLIO_W·Σ(worth children)` and a
+/// task's children are its direct dependents (tasks listing it in `deps`).
+/// Deterministic memoized DP over the DAG, O(V+E) (V20).
+pub fn worth_map(s: &Store) -> HashMap<String, f64> {
+    let ids: HashSet<&str> = s.tasks.iter().map(|t| t.id.as_str()).collect();
+    let mut dependents: HashMap<&str, Vec<&str>> = HashMap::new();
+    for t in &s.tasks {
+        for d in &t.deps {
+            if ids.contains(d.as_str()) {
+                dependents
+                    .entry(d.as_str())
+                    .or_default()
+                    .push(t.id.as_str());
+            }
+        }
+    }
+    let value_of: HashMap<&str, f64> = s
+        .tasks
+        .iter()
+        .map(|t| (t.id.as_str(), t.value as f64))
+        .collect();
+    let mut memo: HashMap<String, f64> = HashMap::new();
+    for t in &s.tasks {
+        worth_of(t.id.as_str(), &dependents, &value_of, &mut memo);
+    }
+    memo
+}
+
+fn worth_of(
+    id: &str,
+    dependents: &HashMap<&str, Vec<&str>>,
+    value_of: &HashMap<&str, f64>,
+    memo: &mut HashMap<String, f64>,
+) -> f64 {
+    if let Some(&w) = memo.get(id) {
+        return w;
+    }
+    memo.insert(id.to_string(), 0.0); // cycle guard (validate rejects real cycles)
+    let children = dependents.get(id).cloned().unwrap_or_default();
+    let child_worths: Vec<f64> = children
+        .iter()
+        .map(|c| worth_of(c, dependents, value_of, memo))
+        .collect();
+    let maxw = child_worths.iter().copied().fold(0.0, f64::max);
+    let sumw: f64 = child_worths.iter().sum();
+    let forward = maxw + PORTFOLIO_W * sumw;
+    let w = value_of.get(id).copied().unwrap_or(0.0) + GAMMA * forward;
+    memo.insert(id.to_string(), w);
+    w
+}
+
+/// Rank = ROI risk-adjusted: `(worth/difficulty)·(1 − risk/6)`. Higher = do first.
+/// Difficulty floors at 1 (unscored → neutral). A filler (value 0, no dependents)
+/// → worth 0 → rank 0, sinks regardless of how cheap it is (V22).
+pub fn rank_of(t: &Task, worth: &HashMap<String, f64>) -> f64 {
+    let w = worth.get(&t.id).copied().unwrap_or(0.0);
+    let diff = t.difficulty.max(1) as f64;
+    (w / diff) * (1.0 - (t.risk as f64) / 6.0)
+}
+
+fn rank_cmp(a: f64, b: f64) -> std::cmp::Ordering {
+    b.partial_cmp(&a).unwrap_or(std::cmp::Ordering::Equal) // desc, NaN-safe
+}
+
+/// One row of the worth ranking (`plan worth`).
+#[derive(Debug, Serialize)]
+pub struct WorthRow {
+    pub id: String,
+    pub status: String,
+    pub value: i64,
+    pub difficulty: i64,
+    pub risk: i64,
+    pub worth: f64,
+    pub rank: f64,
+    pub ready: bool,
+}
+
+/// All tasks scored, highest rank first. `ready` flags the actionable frontier.
+pub fn worth_ranking(s: &Store) -> Vec<WorthRow> {
+    let worth = worth_map(s);
+    let ready_ids: HashSet<&str> = ready(s).iter().map(|t| t.id.as_str()).collect();
+    let mut rows: Vec<WorthRow> = s
+        .tasks
+        .iter()
+        .map(|t| WorthRow {
+            id: t.id.clone(),
+            status: format!("{:?}", t.status).to_lowercase(),
+            value: t.value,
+            difficulty: t.difficulty,
+            risk: t.risk,
+            worth: round2(worth.get(&t.id).copied().unwrap_or(0.0)),
+            rank: round2(rank_of(t, &worth)),
+            ready: ready_ids.contains(t.id.as_str()),
+        })
+        .collect();
+    rows.sort_by(|a, b| rank_cmp(a.rank, b.rank).then(id_num(&a.id).cmp(&id_num(&b.id))));
+    rows
+}
+
+fn round2(x: f64) -> f64 {
+    (x * 100.0).round() / 100.0
+}
+
 /// READY frontier (V17): open tasks with every dep satisfied, sorted by
 /// (priority, id) — the parallelizable batch.
 pub fn ready(s: &Store) -> Vec<&Task> {
@@ -37,8 +146,18 @@ pub fn ready(s: &Store) -> Vec<&Task> {
     r
 }
 
+/// Single best next task: highest `rank` (worth-weighted) among READY, tiebreak
+/// priority then id (V22 — ⊥ pure cheapness/id). Falls back to id order when no
+/// task carries value (rank all 0), preserving old behaviour on unscored specs.
 pub fn next(s: &Store) -> Option<&Task> {
-    ready(s).into_iter().next()
+    let worth = worth_map(s);
+    let mut r = ready(s);
+    r.sort_by(|a, b| {
+        rank_cmp(rank_of(a, &worth), rank_of(b, &worth))
+            .then(a.priority.cmp(&b.priority))
+            .then(id_num(&a.id).cmp(&id_num(&b.id)))
+    });
+    r.into_iter().next()
 }
 
 /// Direct dependents of `id` still open — who is waiting on it.
@@ -233,7 +352,7 @@ pub fn critical_path(s: &Store, goal: Option<&str>) -> Vec<String> {
     }
 }
 
-#[derive(Debug, Serialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, PartialEq)]
 pub struct AltRoute {
     pub id: String,
     pub task: String,
@@ -242,12 +361,17 @@ pub struct AltRoute {
     pub unblocks: usize,
     /// Count of tasks downstream (eventually gated on it).
     pub blocks: usize,
+    /// Value-weighted worth (V24).
+    pub worth: f64,
+    /// Risk-adjusted ROI rank (V22) — the sort key.
+    pub rank: f64,
 }
 
 /// T36 — at the current frontier, each available choice with its payoff:
 /// scope delivered, how many tasks it frees now, how many it gates downstream.
 /// Sorted by unblocks desc (highest leverage first).
 pub fn alternatives(s: &Store) -> Vec<AltRoute> {
+    let worth = worth_map(s);
     let mut out: Vec<AltRoute> = ready(s)
         .into_iter()
         .map(|t| {
@@ -258,12 +382,15 @@ pub fn alternatives(s: &Store) -> Vec<AltRoute> {
                 scope: t.scope.clone(),
                 unblocks: imp.unblocks.len(),
                 blocks: imp.blocks.len(),
+                worth: round2(worth.get(&t.id).copied().unwrap_or(0.0)),
+                rank: round2(rank_of(t, &worth)),
             }
         })
         .collect();
+    // Rank (worth-weighted) first; leverage then id break ties (incl. unscored).
     out.sort_by(|a, b| {
-        b.unblocks
-            .cmp(&a.unblocks)
+        rank_cmp(a.rank, b.rank)
+            .then(b.unblocks.cmp(&a.unblocks))
             .then(id_num(&a.id).cmp(&id_num(&b.id)))
     });
     out
@@ -284,6 +411,7 @@ mod tests {
             cites: vec![],
             scope: vec![format!("src/{id}.rs")],
             note: String::new(),
+            ..Default::default()
         }
     }
 
@@ -291,15 +419,16 @@ mod tests {
     //              T3 → T4
     //   T5 (independent)
     fn graph() -> Store {
-        let mut s = Store::default();
-        s.tasks = vec![
-            task("T1", Status::Done, &[], 0),
-            task("T2", Status::Todo, &["T1"], 0),
-            task("T3", Status::Todo, &["T1"], 0),
-            task("T4", Status::Todo, &["T2", "T3"], 0),
-            task("T5", Status::Todo, &[], 5),
-        ];
-        s
+        Store {
+            tasks: vec![
+                task("T1", Status::Done, &[], 0),
+                task("T2", Status::Todo, &["T1"], 0),
+                task("T3", Status::Todo, &["T1"], 0),
+                task("T4", Status::Todo, &["T2", "T3"], 0),
+                task("T5", Status::Todo, &[], 5),
+            ],
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -375,5 +504,63 @@ mod tests {
         assert_eq!(ids, vec!["T2", "T3", "T5"]);
         let t2 = alts.iter().find(|a| a.id == "T2").unwrap();
         assert_eq!(t2.blocks, 1); // T4 downstream
+    }
+
+    // T1 filler (value 0) vs T2 keystone (unblocks high-value T3).
+    fn valued() -> Store {
+        Store {
+            tasks: vec![
+                Task {
+                    id: "T1".into(),
+                    status: Status::Todo,
+                    difficulty: 1,
+                    ..Default::default()
+                },
+                Task {
+                    id: "T2".into(),
+                    status: Status::Todo,
+                    value: 1,
+                    difficulty: 1,
+                    ..Default::default()
+                },
+                Task {
+                    id: "T3".into(),
+                    status: Status::Todo,
+                    value: 5,
+                    difficulty: 1,
+                    deps: vec!["T2".into()],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn worth_rewards_forward_value_not_id() {
+        let s = valued();
+        let w = worth_map(&s);
+        // keystone T2 carries the discounted value of T3 it unlocks → beats filler T1.
+        assert!(
+            w["T2"] > w["T1"],
+            "keystone {} ≤ filler {}",
+            w["T2"],
+            w["T1"]
+        );
+        assert_eq!(w["T1"], 0.0); // value 0, no dependents → worth 0
+    }
+
+    #[test]
+    fn next_picks_worth_not_lowest_id() {
+        // ready = {T1, T2}; old engine would pick T1 (lowest id). worth picks T2.
+        assert_eq!(next(&valued()).unwrap().id, "T2");
+    }
+
+    #[test]
+    fn filler_sinks_in_ranking() {
+        let rows = worth_ranking(&valued());
+        // T1 (filler) ranks last among the three despite lowest id.
+        assert_eq!(rows.last().unwrap().id, "T1");
+        assert_eq!(rows.first().unwrap().id, "T2"); // highest rank of the ready pair
     }
 }
