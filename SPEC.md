@@ -30,6 +30,9 @@ North star: ⊥ just fewer tokens — move work DOWN the model-size ladder w/o q
 - Hooks = bash shims → delegate to `kittenscrew` → delegates to `squeez`. Never bypass squeez for compression.
 - Wrap ALL 6 squeez hooks: SessionStart, PreToolUse, PostToolUse, SubagentStop, PreCompact, PostCompact.
 - `claudeoneprovider.sh` / `claudeopenrouter.sh` keep working — add `PATH` line only.
+- skills/commands = MINIMAL routing (frontmatter + 2-3 lines "when to use" → point at `kittenscrew <cmd>`), ⊥ instruction dumps. how-to lives in the binary (`--help`) + spec (`spec read`, on-demand), ⊥ front-loaded prose. Goal: help the LLM CHOOSE, ⊥ pre-load every instruction.
+- persona voice = PROGRAM output (`kittenscrew kitty says` → emoji+name+role), ⊥ context decoration. Often omittable — the caller usually knows who's acting. A graphical nicety on output, never a context payload.
+- old verbose skills/commands/`AGENTS.md`/`CAST.md` = kept under `archive/` as reference template (what we wanted), ⊥ loaded. Current state ≠ archive; archive is history.
 
 ## §I INTERFACES
 

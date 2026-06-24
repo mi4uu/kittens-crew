@@ -6,8 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat \"${CLAUDE_PLUGIN_ROOT}/AGENTS.md\"",
-            "commandWindows": "type \"%CLAUDE_PLUGIN_ROOT%\\AGENTS.md\"",
+            "command": "echo 'kittens-crew active · spec/plan via kittenscrew · kitties speak on call (kittenscrew kitty says) · skills are minimal routing, how-to on demand'",
             "timeout": 5,
             "statusMessage": "Loading kittens-crew..."
           }
