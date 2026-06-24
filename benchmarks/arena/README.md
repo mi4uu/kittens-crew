@@ -34,25 +34,57 @@ so arms never see each other's work. `--dangerously-skip-permissions` is set
 *inside the disposable container only* — never on your host. Auth comes from
 `.env`, kept out of every skillset.
 
-## Run
+## Run — scripted (fair, repeatable; the default)
 ```bash
 cp .env.example .env          # add your key (Anthropic or a proxy base-url)
 ./arena.sh build              # build the image once (~few min)
-./arena.sh up kittens ../../path/to/brief-project
-./arena.sh peek kittens               # watch it boot
-./arena.sh send kittens "build me a CLI feed reader. surprise me."
-./arena.sh peek kittens 80            # check progress; repeat as the user would
-./arena.sh artifacts kittens ./out/kittens   # pull the result out
-./arena.sh down kittens
+for arm in baseline kittens cavekit ponytail; do
+  ./arena.sh up  "$arm" ../../path/to/empty-project   # fresh container per arm
+  ./arena.sh run "$arm"                                # IDENTICAL drive ← prompt.txt
+done
+./arena.sh score                                       # one comparable row per arm
+./arena.sh artifacts kittens ./out/kittens             # pull the result code out
+./arena.sh clean                                       # tear down, keep results/
 ```
+`run` is the representativeness backbone: it sends the one brief (`prompt.txt`,
+identical for every arm), then idle-watches the pane and stops when the agent goes
+quiet (`ARENA_IDLE`, default 60s) or the equal budget runs out (`ARENA_MAX`,
+default 40m). **It answers nothing.** The user "talks little, expects miracles":
+if an arm stops to ask, that silence is the autonomy measurement — not a cue to
+hand-hold. No human in the loop ⇒ no per-arm contamination.
+
 Run each arm against a **copy** of the project (arena does this automatically under
 `state/<arm>/work`), so arms never see each other's work.
 
-## Driving (you are the user)
+## Driving manually (debugging only — NOT for scored runs)
 - `send <arm> "<text>"` types a prompt and hits Enter.
 - `keys <arm> Enter|Escape|C-c` sends a raw key (approve a prompt, interrupt).
-- `peek <arm> [lines]` dumps the pane — poll it to decide your next move.
-- Be terse. Let it work. Step in only when a real user would.
+- `peek <arm> [lines]` dumps the pane — poll it to watch.
+- Hand-driving makes the comparison unfair (you'll nudge one arm more than
+  another). Use it to inspect; score only `run`-driven sessions.
+
+## Scoring — machine vs judge
+`./arena.sh score [arm]` emits everything **countable**, per arm, comparable:
+- `elapsed_run` — wall-time of the scripted run (equal budget, so this shows who
+  finished early vs hit the cap).
+- `turns · avg_ctx · peak_ctx` — context the model carried (kittens' thesis: hold
+  it small via targeted injection).
+- `total_tokens` — the real **cost**: every turn's full billable spend
+  (input + both caches + output) summed across the run.
+- `loc:` — LOC split by purpose: `code(rust)` vs `tests(rs w/ #[test])` vs
+  `docs(md)` — so "200 LOC" isn't ambiguous between solution, tests, and README.
+- `build:` / `test:` — does it compile, do its own tests pass.
+
+The **judged** axes (rubric below) still need a human or judge agent reading the
+transcript — plan quality, knowing-when-to-ask, plan-adherence, decision quality.
+Those can't be counted, only read.
+
+### Known limit (not silently hidden): n = 1
+Each arm runs **once**. LLMs are stochastic — a single run is an anecdote, not a
+distribution. For a real claim, run the loop K times (vary nothing but the seed of
+chance) and report spread, not one number. The harness supports it (just re-`up` +
+`run` into a fresh `state/`), but it multiplies a real run's token cost K×, so the
+default is one pass. Read single-run deltas as directional, not significant.
 
 ## What to measure (the rubric)
 Score each arm blind, across arms:
@@ -74,6 +106,7 @@ Capture per arm: start/end timestamps (wall-time), `tokei` LOC on the final
 `../agency/{judge.py,rubric.md}` (local + remote judges).
 
 ## Files
-`Dockerfile` toolchain+claude+kittenscrew · `arena.sh` build/up/send/peek/down ·
-`.env` auth · `state/<arm>/` the arm's mounted `~/.claude` + `work` copy.
+`Dockerfile` neutral toolchain+claude · `arena.sh` build/up/**run**/peek/**score**/
+context/artifacts/clean · `prompt.txt` the one shared brief · `.env` auth ·
+`state/<arm>/` the arm's mounted `~/.claude` + `work` copy + run timestamps.
 Judges/rubric: reuse `../agency/{judge.py,rubric.md}`.
