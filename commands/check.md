@@ -1,5 +1,5 @@
 ---
-description: Verify delivery — fake-scan, value-variance, conformance score.
+description: Use before committing to verify delivery against the kittenscrew spec. Trigger on "did I actually finish this", "check for fake/stub delivery", "score conformance", "value variance". Do NOT use as a general test runner or in a repo with no kittenscrew store.
 argument-hint: "[done | variance | score]"
 ---
 Deterministic quality gates. Run before committing.

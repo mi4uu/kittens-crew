@@ -1,5 +1,5 @@
 ---
-description: Read or mutate the spec. Structured diffs only — kittenscrew validates + writes.
+description: Use when reading or changing the kittenscrew spec. Trigger on "read the spec", "add a task/invariant", "amend §V", "edit §G", "check for drift". Do NOT use to hand-edit SPEC.md directly or to author specs in a repo with no kittenscrew store.
 argument-hint: "[read §X | apply | check | drift]"
 ---
 The spec store (`.kittenscrew/spec.toml`) is authoritative; SPEC.md is its projection.
