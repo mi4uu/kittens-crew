@@ -31,7 +31,7 @@ North star: ⊥ just fewer tokens — move work DOWN the model-size ladder w/o q
 - Wrap ALL 6 squeez hooks: SessionStart, PreToolUse, PostToolUse, SubagentStop, PreCompact, PostCompact.
 - `claudeoneprovider.sh` / `claudeopenrouter.sh` keep working — add `PATH` line only.
 - skills/commands = MINIMAL routing (frontmatter + 2-3 lines "when to use" → point at `kittenscrew <cmd>`), ⊥ instruction dumps. how-to lives in the binary (`--help`) + spec (`spec read`, on-demand), ⊥ front-loaded prose. Goal: help the LLM CHOOSE, ⊥ pre-load every instruction.
-- persona voice = PROGRAM output (`kittenscrew kitty says` → emoji+name+role), ⊥ context decoration. Often omittable — the caller usually knows who's acting. A graphical nicety on output, never a context payload.
+- persona voice = PROGRAM output (`kittenscrew kitty says` → emoji+name+role), ⊥ context decoration. Often omittable — the caller usually knows who's acting. A graphical nicety on output, never a context payload. EXCEPTION (T55): a one-line role HINT (which kitty fits the current task, deterministic task→role map) MAY be injected by the intake/driver hooks as orchestration context — that's routing ("wear this hat"), not decorative prose.
 - old verbose skills/commands/`AGENTS.md`/`CAST.md` = kept under `archive/` as reference template (what we wanted), ⊥ loaded. Current state ≠ archive; archive is history.
 
 ## §I INTERFACES
@@ -161,6 +161,8 @@ T50|.|compression measurement harness: labeled corpus × squeez levels → per-c
 T51|x|`UserPromptSubmit` hook → `kittenscrew hook user-prompt`: classify command {clear\|ambiguous\|maps-§T}, inject ONLY targeted context (spec read relevant + plan next), ⊥ front-load. ambiguous → agent clarifies before acting|T16|V35,V33
 T52|x|`Stop` hook = autonomous driver → `kittenscrew hook stop`: turn-end → check done on touched scope → plan done\|demote, audit cadence (variance/drift every N), decide next→inject+block-stop \| empty→summarize \| ambiguous/flagged→escalate to user. bounded auto-iters, ⊥ runaway|T16,T42,T51|V34,V33,V27
 T53|x|hook dispatch covers ALL CC events (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, Pre/PostCompact) → single kittenscrew entry = the membrane; nothing bypasses (V33). wire via init (T16)|T16|V33
+T54|x|wire T49 compression policy into LIVE hooks: pre/post-tool classify the tool's content (JSON/diff/error/path/number → structured\|diff lossless floor; prose/log/dump → aggressive) → resolve `[compression]` level → pass to squeez (SQUEEZ_LEVEL env) so it compresses at the POLICY-chosen level, ⊥ its own default. kittenscrew decides, squeez does (V10)|T49,T7|V32,V10
+T55|x|role-injection: deterministic task→kitty map (build/impl→Builder, check/drift/review→Entropy, doc/readme→Scribe, spec/plan→Planning, bug→Memory) → intake (T51) + driver (T52) inject `suggested role: 🔨 Builder Kitty (build+ladder)` so the agent knows which hat to wear. Orchestration HINT (⊥ voice prose front-load) — refines §C: caller knows who acts, injection sharpens it|T51,T52|V33,V5
 
 ## §B BUGS
 

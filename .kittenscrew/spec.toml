@@ -27,7 +27,7 @@ constraints = [
     "Wrap ALL 6 squeez hooks: SessionStart, PreToolUse, PostToolUse, SubagentStop, PreCompact, PostCompact.",
     "`claudeoneprovider.sh` / `claudeopenrouter.sh` keep working — add `PATH` line only.",
     'skills/commands = MINIMAL routing (frontmatter + 2-3 lines "when to use" → point at `kittenscrew <cmd>`), ⊥ instruction dumps. how-to lives in the binary (`--help`) + spec (`spec read`, on-demand), ⊥ front-loaded prose. Goal: help the LLM CHOOSE, ⊥ pre-load every instruction.',
-    "persona voice = PROGRAM output (`kittenscrew kitty says` → emoji+name+role), ⊥ context decoration. Often omittable — the caller usually knows who's acting. A graphical nicety on output, never a context payload.",
+    """persona voice = PROGRAM output (`kittenscrew kitty says` → emoji+name+role), ⊥ context decoration. Often omittable — the caller usually knows who's acting. A graphical nicety on output, never a context payload. EXCEPTION (T55): a one-line role HINT (which kitty fits the current task, deterministic task→role map) MAY be injected by the intake/driver hooks as orchestration context — that's routing ("wear this hat"), not decorative prose.""",
     "old verbose skills/commands/`AGENTS.md`/`CAST.md` = kept under `archive/` as reference template (what we wanted), ⊥ loaded. Current state ≠ archive; archive is history.",
 ]
 interfaces = [
@@ -1006,6 +1006,44 @@ scope = []
 note = ""
 value = 4
 difficulty = 3
+risk = 2
+
+[[task]]
+id = "T54"
+status = "done"
+task = "wire T49 compression policy into LIVE hooks: pre/post-tool classify the tool's content (JSON/diff/error/path/number → structured|diff lossless floor; prose/log/dump → aggressive) → resolve `[compression]` level → pass to squeez (SQUEEZ_LEVEL env) so it compresses at the POLICY-chosen level, ⊥ its own default. kittenscrew decides, squeez does (V10)"
+deps = [
+    "T49",
+    "T7",
+]
+priority = 0
+cites = [
+    "V32",
+    "V10",
+]
+scope = []
+note = ""
+value = 4
+difficulty = 3
+risk = 2
+
+[[task]]
+id = "T55"
+status = "done"
+task = "role-injection: deterministic task→kitty map (build/impl→Builder, check/drift/review→Entropy, doc/readme→Scribe, spec/plan→Planning, bug→Memory) → intake (T51) + driver (T52) inject `suggested role: 🔨 Builder Kitty (build+ladder)` so the agent knows which hat to wear. Orchestration HINT (⊥ voice prose front-load) — refines §C: caller knows who acts, injection sharpens it"
+deps = [
+    "T51",
+    "T52",
+]
+priority = 0
+cites = [
+    "V33",
+    "V5",
+]
+scope = []
+note = ""
+value = 4
+difficulty = 2
 risk = 2
 
 [[bug]]
