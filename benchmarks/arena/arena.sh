@@ -87,6 +87,13 @@ cmd_up() {
   rm -rf "$STATE/$arm"; mkdir -p "$work" "$cdir"
   seed_auth "$cdir"                      # same token, every arm; nothing else
   cp -r "$project/." "$work/"            # each arm mutates its OWN copy
+  # Skill arms get the generic, identical "use your skillset" nudge (counters the
+  # model's default-solve-alone). Baseline gets none — it has no skillset. The
+  # nudge names no skill + tunes no outcome, so it doesn't juice any one arm.
+  case "$arm" in
+    baseline) : ;;
+    *) cp "$HERE/CLAUDE.skillarm.md" "$cdir/CLAUDE.md" ;;  # ~/.claude scope, keeps /work clean
+  esac
   docker rm -f "$c" >/dev/null 2>&1 || true
   # Baseline never sees /repo → it cannot pick up any of our tooling.
   local repo_mount=(); needs_repo "$arm" && repo_mount=(-v "$REPO:/repo:ro")
