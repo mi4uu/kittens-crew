@@ -12,6 +12,7 @@ global ~/.claude, --append-system-prompt injects only the arm's skill.
 import json, os, re, subprocess, sys, time, shutil, glob, datetime, hashlib, threading
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+from tmux_driver import TmuxSession
 
 HERE = Path(__file__).parent
 RUNS = HERE / "runs"
@@ -76,11 +77,13 @@ def resolve_skill(arm) -> str:
         txt = (txt + "\n\n" + arm["appendText"]).strip()
     return txt
 
-def claude(workspace: Path, message: str, skill: str, resume=None) -> dict:
-    """One agent turn. Returns parsed result JSON (incl session_id, cost, usage)."""
+def claude(workspace: Path, message: str, skill: str, resume=None, max_turns=60) -> dict:
+    """One user turn in the interactive session. Returns parsed result JSON
+    (session_id, cost, usage). Multi-turn is via --resume, so the agent converses
+    turn-by-turn like a real session — not one autonomous shot."""
     args = ["claude", "-p", message, "--model", AGENT_MODEL,
             "--setting-sources", "project,local", "--strict-mcp-config",
-            "--dangerously-skip-permissions", "--output-format", "json", "--max-turns", "60"]
+            "--dangerously-skip-permissions", "--output-format", "json", "--max-turns", str(max_turns)]
     if skill:
         args += ["--append-system-prompt", skill]
     if resume:
@@ -119,6 +122,23 @@ def proxy_decide(transcript: list, stage: str) -> dict:
         return json.loads(re.search(r"\{.*\}", res, re.S).group(0))
     except Exception:
         return {"action": "continue", "questions": [], "message": "Please continue."}
+
+def extract_questions(agent_text: str) -> list:
+    """Pull the genuine clarifying questions the agent asked the USER (empty if none)."""
+    if "?" not in agent_text:
+        return []
+    sys_p = ("From the assistant message, extract ONLY genuine clarifying questions it is asking "
+             "the USER to decide (not rhetorical, not already self-answered, not status updates). "
+             'Output STRICT JSON {"questions":["...verbatim..."]}. Empty list if none.')
+    args = ["claude", "-p", agent_text[:6000], "--model", PROXY_MODEL, "--setting-sources",
+            "project,local", "--strict-mcp-config", "--append-system-prompt", sys_p,
+            "--output-format", "json", "--max-turns", "2"]
+    p = subprocess.run(args, capture_output=True, text=True)
+    try:
+        res = json.loads(p.stdout)["result"]
+        return json.loads(re.search(r"\{.*\}", res, re.S).group(0)).get("questions", [])
+    except Exception:
+        return []
 
 def oracle_answer(questions: list) -> str:
     """Memoized human oracle: reuse stored answers; ask the real user for new ones."""
@@ -163,38 +183,57 @@ def run_arm(arm, stamp):
     name = arm["name"]
     ws = RUNS / stamp / name / "workspace"
     ws.mkdir(parents=True, exist_ok=True)
-    skill = resolve_skill(arm)
-    if (arm.get("appendFile") and not skill):
-        print(f"  skip {name}: skill file not found"); return None
-    print(f"\n=== arm: {name} ===")
+    skill = resolve_skill(arm)  # extra prompt text (yagni strings, 'Be brief.')
+    plugin_dir = None           # the FULL kit plugin (kittens-crew, ponytail, caveman)
+    if arm.get("pluginDir"):
+        pd = os.path.expanduser(arm["pluginDir"])
+        if pd.startswith("../"):
+            pd = str((HERE / arm["pluginDir"]).resolve())
+        hits = glob.glob(pd)
+        plugin_dir = hits[0] if hits else (pd if os.path.exists(pd) else None)
+        if not plugin_dir:
+            print(f"  skip {name}: plugin dir not found ({arm['pluginDir']})"); return None
+    print(f"\n=== arm: {name} === (plugin: {plugin_dir or '—'})")
     transcript, telem = [], {"cost_usd": 0.0, "turns": 0, "wall_s": 0.0, "doc_twist": {}}
-    transcript.append({"role": "user", "text": brief})
-    r = claude(ws, brief, skill)
-    sid = r.get("session_id")
-    stage_i = 0
-    for _ in range(MAX_TURNS):
-        telem["turns"] += 1; telem["cost_usd"] += r.get("total_cost_usd", 0) or 0; telem["wall_s"] += r.get("_wall_s", 0)
-        transcript.append({"role": "agent", "text": r.get("result", "")})
-        stage = STAGE_ORDER[min(stage_i, len(STAGE_ORDER) - 1)]
-        d = proxy_decide(transcript, stage)
-        if d["action"] == "ask" and d.get("questions"):
-            msg = oracle_answer(d["questions"])
-        elif d["action"] == "end":
-            # advance to the next stage's twist, or finish after the docs twist
-            tw = TWISTS.get(STAGE_ORDER[stage_i]) if stage_i < len(STAGE_ORDER) else None
-            if tw:
-                if tw["id"] == "docs":  # measure the extra effort this twist costs
-                    telem["doc_twist"]["turns_before"] = telem["turns"]
-                msg = tw["message"]; transcript.append({"role": "user", "text": "[TWIST] " + msg})
-                stage_i += 1
-            else:
-                break
-        else:
-            msg = d.get("message") or "Please continue."
-        transcript.append({"role": "user", "text": msg})
-        r = claude(ws, msg, skill, resume=sid)
-    if "turns_before" in telem["doc_twist"]:
-        telem["doc_twist"]["turns_after"] = telem["turns"] - telem["doc_twist"]["turns_before"]
+    out_dir = RUNS / stamp / name
+    skill_file = None
+    if skill:
+        skill_file = out_dir / "_skill.txt"; skill_file.write_text(skill)
+    # REAL interactive Claude Code via tmux — driven turn-by-turn like a user.
+    sess = TmuxSession(name, ws, skill_file, AGENT_MODEL, plugin_dir=plugin_dir)
+    def turn(msg, timeout, phase):
+        transcript.append({"role": "user", "text": msg, "phase": phase})
+        t0 = time.time()
+        txt = sess.turn(msg, timeout)
+        telem["turns"] += 1; telem["wall_s"] += time.time() - t0
+        transcript.append({"role": "agent", "text": txt, "phase": phase})
+        print(f"  {name} [{phase}] turn {telem['turns']} ({len(txt)} chars)", flush=True)
+        return txt
+
+    # PHASE 1 — PLAN, no code. Agent should propose an approach and ASK about the
+    # real forks. Building now (ignoring 'no code') is a consultation failure (judged).
+    out = turn(brief + "  [Before any code, let's talk.] Propose how you'd build this and ASK me "
+               "about anything you genuinely need decided (formats, storage, sync vs async, output, "
+               "config, commands, scale). Do NOT write code yet — just the plan and your questions.",
+               150, "plan")
+    for _ in range(3):  # up to 3 Q&A rounds, answered by the REAL user via the bridge
+        qs = extract_questions(out)
+        if not qs:
+            break
+        out = turn(oracle_answer(qs) + "  Update the plan if needed, then tell me when you're ready to build.", 150, "plan")
+
+    # PHASE 2 — BUILD
+    turn("Good — go ahead and build it. Get it compiling with the core covered by tests.", 900, "build")
+    # PHASE 3 — TWISTS injected mid-stream like a real user
+    for tw in [t for t in scenario["twists"] if t["id"] in ("scale", "filter")]:
+        turn(tw["message"], 600, "twist:" + tw["id"])
+    # PHASE 4 — DOCS (withheld until now) — measure the extra effort it costs
+    telem["doc_twist"]["turns_before"] = telem["turns"]
+    docs = next(t for t in scenario["twists"] if t["id"] == "docs")
+    turn(docs["message"], 600, "docs")
+    telem["doc_twist"]["turns_after"] = telem["turns"] - telem["doc_twist"]["turns_before"]
+    (out_dir / "tui-pane.txt").write_text(sess.full_transcript())
+    telem["cost_usd"] = sess.close()
 
     # ---- objective build/test/doc + size --------------------------------
     # the agent usually runs `cargo new <name>`, so the project is in a subdir.

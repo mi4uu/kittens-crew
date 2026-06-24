@@ -1,11 +1,11 @@
 {
-  "_doc": "Each arm = one skill injected via --append-system-prompt, fully isolated (--setting-sources project,local --strict-mcp-config, fresh workspace, no global config). prompt strings are exact. caveman/ponytail resolve from the local plugin cache on host; the Dockerfile vendors them in.",
+  "_doc": "Each arm = one kit, loaded the way a user actually has it. Skill-based kits (kittens-crew, ponytail, caveman) load the FULL plugin via --plugin-dir, so their commands + skills + SessionStart hook/persona are all real — not just a persona snippet. yagni/yagni-oneliner are pure prompt strings (--append-system-prompt). baseline gets nothing. Isolation: --setting-sources project,local --strict-mcp-config excludes the user's global config; --plugin-dir loads only the arm's plugin.",
   "arms": [
     { "name": "baseline" },
-    { "name": "kittens-crew", "appendFile": "../../AGENTS.md" },
-    { "name": "brief-kittens", "appendFile": "../../AGENTS.md", "appendText": "Be brief." },
-    { "name": "caveman", "appendFile": "~/.claude/plugins/cache/caveman/caveman/*/caveman/SKILL.md" },
-    { "name": "ponytail", "appendFile": "~/.claude/plugins/cache/ponytail/ponytail/*/skills/ponytail/SKILL.md" },
+    { "name": "kittens-crew", "pluginDir": "../.." },
+    { "name": "brief-kittens", "pluginDir": "../..", "appendText": "Be brief." },
+    { "name": "caveman", "pluginDir": "~/.claude/plugins/cache/caveman/caveman/*" },
+    { "name": "ponytail", "pluginDir": "~/.claude/plugins/cache/ponytail/ponytail/*" },
     { "name": "yagni", "appendText": "Follow YAGNI principles." },
     { "name": "yagni-oneliner", "appendText": "Follow YAGNI principles, and prefer one-liner solutions." }
   ]
