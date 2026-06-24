@@ -31,13 +31,13 @@ cmd_build() {
   ( cd "$HERE" && docker build -t "$IMAGE" . )
 }
 
-# Does this arm need the repo mounted (to self-install its skillset)? Baseline
-# must NOT see /repo — it stays pristine.
-needs_repo() { case "$1" in kittens|cavekit) return 0 ;; *) return 1 ;; esac; }
+# Only kittens needs the repo mounted (its installer + crate live here). Every
+# other arm installs from GitHub and never sees /repo — keeps them clean too.
+needs_repo() { case "$1" in kittens) return 0 ;; *) return 1 ;; esac; }
 
-# Provision the arm's clean ~/.claude. Runs INSIDE the container so an arm builds
-# + installs its OWN skillset from nothing — no host install, no cross-arm
-# leftovers. The membrane records the container's kittenscrew path.
+# Provision the arm's clean ~/.claude. Runs INSIDE the container so each arm
+# installs its OWN skillset from nothing — no host install, no cross-arm
+# leftovers. Auth comes from .env (env), so the dir stays free of history.
 provision() {
   local arm="$1" c; c="$(cname "$arm")"
   case "$arm" in
@@ -48,8 +48,15 @@ provision() {
       # drops the plugin, wires the membrane. Exactly the real install path.
       docker exec "$c" bash /repo/install.sh --target /root/.claude --project /work ;;
     cavekit)
-      docker exec "$c" bash -lc '[ -x /repo/benchmarks/arena/arms/cavekit.sh ] && bash /repo/benchmarks/arena/arms/cavekit.sh || echo "cavekit arm: add arms/cavekit.sh to provision it"' ;;
-    *) echo "unknown arm: $arm (baseline|kittens|cavekit)"; exit 2 ;;
+      # cavekit v4 — pure skills + commands, no toggle/activation. The marketplace
+      # install enables it; that IS the activation.
+      docker exec "$c" bash -lc 'claude plugin marketplace add juliusbrussee/cavekit \
+        && claude plugin install ck@cavekit-marketplace' ;;
+    ponytail)
+      # ponytail — Claude Code marketplace plugin (auto-activates each session).
+      docker exec "$c" bash -lc 'claude plugin marketplace add DietrichGebert/ponytail \
+        && claude plugin install ponytail@ponytail' ;;
+    *) echo "unknown arm: $arm (baseline|kittens|cavekit|ponytail)"; exit 2 ;;
   esac
 }
 
