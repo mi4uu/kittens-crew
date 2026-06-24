@@ -183,6 +183,10 @@ text = "render-triggering cmd (`spec apply`/`plan done`/`check done` demote) ! v
 id = "V31"
 text = "conformance = GRADED %, ⊥ binary pass/fail. score dims (§I-completeness, `check done` pass-rate, dep-coverage, sync, invariant-test coverage) → 0-100% each + aggregate. weird spec≠code case → lock w/ specific + generic unit test AND it dents the % until fixed → track convergence over commits, ⊥ expect all-at-once"
 
+[[invariant]]
+id = "V32"
+text = "compression level chosen per content-class by MEASURED net gain, ⊥ uniform ultra. `net = tokens_saved − P(fidelity_loss)·rerun_cost`. structured/actionable (JSON, build/test errors, diffs, paths, numbers) → lossless floor (savings small, loss forces re-run = net negative); prose/large-reads/dumps → aggressive (savings high, loss ≈ 0). measure on labeled corpus, ⊥ assume. NB: real token weight = front-loaded context (cached system prompt), ⊥ tool output — compress the right cost center"
+
 [[task]]
 id = "T1"
 status = "done"
@@ -905,6 +909,38 @@ satisfaction = 5
 conformance = 5
 tokens = 12000
 note = "score dims solid"
+
+[[task]]
+id = "T49"
+status = "todo"
+task = "`[compression]` config: per content-class level (prose|dump|structured|diff → off|full|ultra). kittenscrew owns the POLICY, squeez does the work (wrap, ⊥ reimpl)"
+deps = ["T15"]
+priority = 0
+cites = [
+    "V32",
+    "V10",
+]
+scope = []
+note = ""
+value = 3
+difficulty = 2
+risk = 2
+
+[[task]]
+id = "T50"
+status = "todo"
+task = "compression measurement harness: labeled corpus × squeez levels → per-class {tokens_saved, fidelity (lossless on numbers/paths/errors/JSON), net = saved − P(loss)·rerun_cost} → recommended policy. deterministic, graded like score"
+deps = [
+    "T48",
+    "T49",
+]
+priority = 0
+cites = ["V32"]
+scope = []
+note = ""
+value = 4
+difficulty = 4
+risk = 3
 
 [[bug]]
 id = "B1"

@@ -96,6 +96,7 @@ V28: ∀ §I-declared `cmd:` ! resolve to a real binary subcommand (interface-co
 V29: remote review = OPTIONAL advisory primitive (config roster of remote agents via OpenRouter: {key, model, role-desc}) → gets diff + ONLY the relevant spec fragment (⊥ whole spec) → returns few-sentence notes/suggestions → ⊥ blocks, ⊥ auto-applies; feeds deliberation (eval|brainstorm|ask). 0-runtime-dep (§C) → shell to `curl`, ⊥ link HTTP crate. absent config → silently skipped
 V30: render-triggering cmd (`spec apply`/`plan done`/`check done` demote) ! verify SPEC.md ≡ store projection FIRST (`is_synced`) → diverges (manual prose edit pending) → abort exit 2 + suggest `spec drift --apply`, ⊥ silently clobber the edit
 V31: conformance = GRADED %, ⊥ binary pass/fail. score dims (§I-completeness, `check done` pass-rate, dep-coverage, sync, invariant-test coverage) → 0-100% each + aggregate. weird spec≠code case → lock w/ specific + generic unit test AND it dents the % until fixed → track convergence over commits, ⊥ expect all-at-once
+V32: compression level chosen per content-class by MEASURED net gain, ⊥ uniform ultra. `net = tokens_saved − P(fidelity_loss)·rerun_cost`. structured/actionable (JSON, build/test errors, diffs, paths, numbers) → lossless floor (savings small, loss forces re-run = net negative); prose/large-reads/dumps → aggressive (savings high, loss ≈ 0). measure on labeled corpus, ⊥ assume. NB: real token weight = front-loaded context (cached system prompt), ⊥ tool output — compress the right cost center
 
 ## §T TASKS
 
@@ -148,6 +149,8 @@ T45|x|interface-completeness gate: test §I declared cmds ⊆ binary clap subcom
 T46|x|persist toml-only fields (value/difficulty/risk/priority/scope/eval) across SPEC.md round-trip — decide: commit store \| render into SPEC.md \| sidecar. currently LOST on reimport (gitignored store + SPEC.md ⊥ carries them), silently|T33|V9,V23
 T47|x|render-triggering cmds (spec apply, plan done, check done demote) detect SPEC.md drift vs store FIRST → abort + suggest `spec drift --apply` (prevent silent clobber of manual prose §G/§C/§I/§V edits). Discovered live: hand-edit §I then apply rendered stale store, dropped the edit|T29|V9,V16
 T48|x|`kittenscrew score` — GRADED conformance % (V31): dims §I-completeness, check-done pass-rate, dep-coverage, sync, invariant-test-coverage → 0-100 each + aggregate. deterministic. track convergence per commit, ⊥ binary|T28,T30|V31
+T49|.|`[compression]` config: per content-class level (prose\|dump\|structured\|diff → off\|full\|ultra). kittenscrew owns the POLICY, squeez does the work (wrap, ⊥ reimpl)|T15|V32,V10
+T50|.|compression measurement harness: labeled corpus × squeez levels → per-class {tokens_saved, fidelity (lossless on numbers/paths/errors/JSON), net = saved − P(loss)·rerun_cost} → recommended policy. deterministic, graded like score|T48,T49|V32
 
 ## §B BUGS
 
