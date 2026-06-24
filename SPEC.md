@@ -163,6 +163,7 @@ T52|x|`Stop` hook = autonomous driver → `kittenscrew hook stop`: turn-end → 
 T53|x|hook dispatch covers ALL CC events (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, Pre/PostCompact) → single kittenscrew entry = the membrane; nothing bypasses (V33). wire via init (T16)|T16|V33
 T54|x|wire T49 compression policy into LIVE hooks: pre/post-tool classify the tool's content (JSON/diff/error/path/number → structured\|diff lossless floor; prose/log/dump → aggressive) → resolve `[compression]` level → pass to squeez (SQUEEZ_LEVEL env) so it compresses at the POLICY-chosen level, ⊥ its own default. kittenscrew decides, squeez does (V10)|T49,T7|V32,V10
 T55|x|role-injection: deterministic task→kitty map (build/impl→Builder, check/drift/review→Entropy, doc/readme→Scribe, spec/plan→Planning, bug→Memory) → intake (T51) + driver (T52) inject `suggested role: 🔨 Builder Kitty (build+ladder)` so the agent knows which hat to wear. Orchestration HINT (⊥ voice prose front-load) — refines §C: caller knows who acts, injection sharpens it|T51,T52|V33,V5
+T56|x|minimal skillset packaging: refresh plugin.json (real control-plane desc), hooks/hooks.json carries the 8-event membrane (plugin-enable wires control), thin commands/ {spec\|plan\|check\|init → route to `kittenscrew <cmd>`} + one routing skill — §C-minimal (⊥ instruction dumps, point at binary). Makes kittens-crew a drop-in standalone skillset + deployable benchmark arm|T16,T53|V33
 
 ## §B BUGS
 

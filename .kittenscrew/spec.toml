@@ -1046,6 +1046,22 @@ value = 4
 difficulty = 2
 risk = 2
 
+[[task]]
+id = "T56"
+status = "done"
+task = "minimal skillset packaging: refresh plugin.json (real control-plane desc), hooks/hooks.json carries the 8-event membrane (plugin-enable wires control), thin commands/ {spec|plan|check|init → route to `kittenscrew <cmd>`} + one routing skill — §C-minimal (⊥ instruction dumps, point at binary). Makes kittens-crew a drop-in standalone skillset + deployable benchmark arm"
+deps = [
+    "T16",
+    "T53",
+]
+priority = 0
+cites = ["V33"]
+scope = []
+note = ""
+value = 4
+difficulty = 2
+risk = 1
+
 [[bug]]
 id = "B1"
 date = "2026-06-24"

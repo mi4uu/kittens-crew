@@ -1,5 +1,5 @@
 {
   "name": "kitten",
-  "description": "Spec-driven build pipeline with a lazy-senior quality reflex. One SPEC.md, three commands (/kitten:spec, /kitten:build, /kitten:check). The Keeper tracks goals, interfaces, invariants, tasks and bugs; the Builder climbs the laziness ladder before writing a line. No sub-agents. Caveman-encoded spec. Bug-to-spec backprop. Two proven ideas welded into one crew of kitties: cavekit's durable spec pipeline and ponytail's laziness ladder. v1, and only getting sharper.",
-  "version": "1.0.0"
+  "description": "kittens-crew — a deterministic control plane for Claude Code. A Rust binary (`kittenscrew`) owns spec/plan/eval bookkeeping so the model spends its reasoning on judgement, not housekeeping. One authoritative spec store (`.kittenscrew/spec.toml`, projected to SPEC.md), a worth-ranked DAG planner, deterministic quality gates (structured-diff §V validation, fake-delivery scan, value-variance, conformance score), and an 8-event hook membrane: every Claude Code event routes through `kittenscrew hook`, injecting targeted context (plan next + referenced task + suggested kitty role) and — opt-in, hard-bounded — driving the plan forward autonomously. Compression policy keeps structured output (JSON, errors, diffs) on a lossless floor while squeez compresses prose. Commands are thin routers to the binary; the kitties speak from the program. v2 — the drive wheel.",
+  "version": "2.0.0"
 }

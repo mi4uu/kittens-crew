@@ -4,14 +4,30 @@
       {
         "matcher": "startup|resume|clear|compact",
         "hooks": [
-          {
-            "type": "command",
-            "command": "echo 'kittens-crew active · spec/plan via kittenscrew · kitties speak on call (kittenscrew kitty says) · skills are minimal routing, how-to on demand'",
-            "timeout": 5,
-            "statusMessage": "Loading kittens-crew..."
-          }
+          { "type": "command", "command": "kittenscrew hook session-start", "timeout": 15 }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "kittenscrew hook user-prompt", "timeout": 15 } ] }
+    ],
+    "PreToolUse": [
+      { "hooks": [ { "type": "command", "command": "kittenscrew hook pre-tool", "timeout": 30 } ] }
+    ],
+    "PostToolUse": [
+      { "hooks": [ { "type": "command", "command": "kittenscrew hook post-tool", "timeout": 30 } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "kittenscrew hook stop", "timeout": 30 } ] }
+    ],
+    "SubagentStop": [
+      { "hooks": [ { "type": "command", "command": "kittenscrew hook subagent-stop", "timeout": 30 } ] }
+    ],
+    "PreCompact": [
+      { "hooks": [ { "type": "command", "command": "kittenscrew hook pre-compact", "timeout": 15 } ] }
+    ],
+    "PostCompact": [
+      { "hooks": [ { "type": "command", "command": "kittenscrew hook post-compact", "timeout": 15 } ] }
     ]
   }
 }
