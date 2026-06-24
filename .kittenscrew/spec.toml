@@ -192,9 +192,9 @@ priority = 0
 cites = ["§I"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 4
+difficulty = 3
+risk = 1
 
 [[task]]
 id = "T2"
@@ -205,9 +205,9 @@ priority = 0
 cites = ["§I"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 1
+risk = 1
 
 [[task]]
 id = "T3"
@@ -218,9 +218,9 @@ priority = 0
 cites = ["V5"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 1
+risk = 1
 
 [[task]]
 id = "T4"
@@ -231,9 +231,9 @@ priority = 0
 cites = ["V7"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 3
+difficulty = 2
+risk = 1
 
 [[task]]
 id = "T5"
@@ -247,9 +247,9 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 1
+risk = 1
 
 [[task]]
 id = "T6"
@@ -260,9 +260,9 @@ priority = 0
 cites = ["V7"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 1
+risk = 1
 
 [[task]]
 id = "T7"
@@ -273,9 +273,9 @@ priority = 0
 cites = ["V7"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 1
+risk = 1
 
 [[task]]
 id = "T8"
@@ -286,9 +286,9 @@ priority = 0
 cites = ["V7"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 1
+risk = 1
 
 [[task]]
 id = "T9"
@@ -299,9 +299,9 @@ priority = 0
 cites = ["§I"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 4
+difficulty = 2
+risk = 1
 
 [[task]]
 id = "T10"
@@ -315,9 +315,9 @@ priority = 0
 cites = ["V3"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 5
+difficulty = 4
+risk = 3
 
 [[task]]
 id = "T11"
@@ -331,9 +331,9 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 3
+difficulty = 2
+risk = 1
 
 [[task]]
 id = "T12"
@@ -386,9 +386,9 @@ priority = 0
 cites = ["§I"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 4
+difficulty = 2
+risk = 1
 
 [[task]]
 id = "T16"
@@ -412,9 +412,9 @@ priority = 0
 cites = ["§C"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 1
+risk = 1
 
 [[task]]
 id = "T18"
@@ -425,9 +425,9 @@ priority = 0
 cites = ["V1"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 3
+difficulty = 2
+risk = 2
 
 [[task]]
 id = "T19"
@@ -438,9 +438,9 @@ priority = 0
 cites = ["§I"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 1
+risk = 1
 
 [[task]]
 id = "T20"
@@ -467,9 +467,9 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 1
+risk = 1
 
 [[task]]
 id = "T22"
@@ -484,9 +484,9 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 1
+risk = 1
 
 [[task]]
 id = "T23"
@@ -497,9 +497,9 @@ priority = 0
 cites = ["V12"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 2
+risk = 1
 
 [[task]]
 id = "T24"
@@ -532,9 +532,9 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 5
+difficulty = 4
+risk = 2
 
 [[task]]
 id = "T26"
@@ -558,9 +558,9 @@ priority = 0
 cites = ["V9"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 4
+difficulty = 3
+risk = 2
 
 [[task]]
 id = "T28"
@@ -576,9 +576,9 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 5
+difficulty = 5
+risk = 3
 
 [[task]]
 id = "T29"
@@ -589,9 +589,9 @@ priority = 0
 cites = ["V16"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 4
+difficulty = 3
+risk = 2
 
 [[task]]
 id = "T30"
@@ -605,9 +605,9 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 4
+difficulty = 3
+risk = 2
 
 [[task]]
 id = "T31"
@@ -618,9 +618,9 @@ priority = 0
 cites = ["V18"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 3
+difficulty = 2
+risk = 1
 
 [[task]]
 id = "T32"
@@ -634,9 +634,9 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 1
+difficulty = 2
+risk = 1
 
 [[task]]
 id = "T33"
@@ -650,15 +650,15 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 4
+difficulty = 3
+risk = 2
 
 [[task]]
 id = "T34"
 status = "done"
 task = "`kittenscrew plan path [<goal>]` → critical path (longest prereq chain) via DAG DP"
-deps = []
+deps = ["T28"]
 priority = 0
 cites = [
     "§I",
@@ -667,15 +667,15 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 3
+difficulty = 3
+risk = 2
 
 [[task]]
 id = "T35"
 status = "done"
 task = "`kittenscrew plan impact <id>` → scope + newly-ready (unblocks) + transitive dependents (blocks)"
-deps = []
+deps = ["T28"]
 priority = 0
 cites = [
     "§I",
@@ -684,15 +684,15 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 3
+difficulty = 3
+risk = 2
 
 [[task]]
 id = "T36"
 status = "done"
 task = "`kittenscrew plan alternatives` → frontier choices each w/ {scope, unblocks, blocks}, ranked by leverage"
-deps = []
+deps = ["T28"]
 priority = 0
 cites = [
     "§I",
@@ -700,22 +700,22 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 3
+difficulty = 3
+risk = 2
 
 [[task]]
 id = "T37"
 status = "done"
 task = "`spec read --plain` → deterministic symbol→English expand (FORMAT.md legend baked in); ⊥ stored, derived on demand"
-deps = []
+deps = ["T27"]
 priority = 0
 cites = ["V21"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 2
+difficulty = 2
+risk = 1
 
 [[task]]
 id = "T38"
@@ -734,14 +734,14 @@ risk = 0
 id = "T39"
 status = "done"
 task = "extend Task schema: `value`/`difficulty`/`risk` (1-5, @creation) + `[task.eval]` `satisfaction`/`conformance`/`tokens` (@done); serde defaults → backward-compat"
-deps = []
+deps = ["T28"]
 priority = 0
 cites = ["V23"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 4
+difficulty = 3
+risk = 1
 
 [[task]]
 id = "T40"
@@ -755,9 +755,9 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 5
+difficulty = 4
+risk = 3
 
 [[task]]
 id = "T41"
@@ -837,7 +837,7 @@ risk = 3
 id = "T45"
 status = "done"
 task = "interface-completeness gate: test §I declared cmds ⊆ binary clap subcommand tree (forge §I↔code drift lesson into deterministic floor)"
-deps = []
+deps = ["T48"]
 priority = 0
 cites = ["V28"]
 scope = []
@@ -850,7 +850,7 @@ risk = 1
 id = "T46"
 status = "done"
 task = "persist toml-only fields (value/difficulty/risk/priority/scope/eval) across SPEC.md round-trip — decide: commit store | render into SPEC.md | sidecar. currently LOST on reimport (gitignored store + SPEC.md ⊥ carries them), silently"
-deps = []
+deps = ["T33"]
 priority = 0
 cites = [
     "V9",
@@ -880,22 +880,25 @@ cites = [
 ]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 4
+difficulty = 2
+risk = 2
 
 [[task]]
 id = "T48"
 status = "done"
 task = "`kittenscrew score` — GRADED conformance % (V31): dims §I-completeness, check-done pass-rate, dep-coverage, sync, invariant-test-coverage → 0-100 each + aggregate. deterministic. track convergence per commit, ⊥ binary"
-deps = ["T45"]
+deps = [
+    "T28",
+    "T30",
+]
 priority = 0
 cites = ["V31"]
 scope = []
 note = ""
-value = 0
-difficulty = 0
-risk = 0
+value = 4
+difficulty = 3
+risk = 2
 
 [task.eval]
 satisfaction = 5
