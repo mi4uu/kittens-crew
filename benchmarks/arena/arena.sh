@@ -24,7 +24,23 @@ SESSION="cc"
 ENV_FILE="$HERE/.env"   # ANTHROPIC_API_KEY=… (+ ANTHROPIC_BASE_URL=… for a proxy)
 
 cname() { echo "arena-$1"; }
-need_env() { [ -f "$ENV_FILE" ] || { echo "missing $ENV_FILE (copy .env.example, add your key)"; exit 1; }; }
+need_env() { [ -f "$ENV_FILE" ] || { echo "missing $ENV_FILE (copy .env.example)"; exit 1; }; }
+
+# Transfer the SAME auth from the host's Claude Code into the arm's clean
+# ~/.claude — ONLY the OAuth credentials, never history or other artifacts.
+# macOS keeps them in the Keychain; Linux/other in a file.
+seed_auth() {
+  local cdir="$1"
+  if security find-generic-password -s "Claude Code-credentials" -w >/dev/null 2>&1; then
+    security find-generic-password -s "Claude Code-credentials" -w > "$cdir/.credentials.json"
+    echo "  auth: seeded host Keychain OAuth → $cdir/.credentials.json"
+  elif [ -f "$HOME/.claude/.credentials.json" ]; then
+    cp "$HOME/.claude/.credentials.json" "$cdir/.credentials.json"
+    echo "  auth: copied host .credentials.json"
+  else
+    echo "  auth: WARN no host credentials found — relying on .env"
+  fi
+}
 
 cmd_build() {
   # Neutral base image — nothing skillset-specific is baked in.
@@ -66,19 +82,34 @@ cmd_up() {
   local c; c="$(cname "$arm")"
   local work="$STATE/$arm/work" cdir="$STATE/$arm/claude"
   rm -rf "$STATE/$arm"; mkdir -p "$work" "$cdir"
+  seed_auth "$cdir"                      # same token, every arm; nothing else
   cp -r "$project/." "$work/"            # each arm mutates its OWN copy
   docker rm -f "$c" >/dev/null 2>&1 || true
   # Baseline never sees /repo → it cannot pick up any of our tooling.
   local repo_mount=(); needs_repo "$arm" && repo_mount=(-v "$REPO:/repo:ro")
-  docker run -d --name "$c" --env-file "$ENV_FILE" \
-    "${repo_mount[@]}" -v "$cdir:/root/.claude" -v "$work:/work" \
+  # IS_SANDBOX=1 lets claude run --dangerously-skip-permissions as root in the
+  # disposable container (it refuses as root otherwise).
+  docker run -d --name "$c" --env-file "$ENV_FILE" -e IS_SANDBOX=1 \
+    ${repo_mount[@]+"${repo_mount[@]}"} -v "$cdir:/root/.claude" -v "$work:/work" \
     "$IMAGE" sleep infinity >/dev/null
   provision "$arm"
+  # Skip first-run onboarding (theme picker etc.) so the session opens straight to
+  # the prompt. ~/.claude.json lives in HOME, beside the mounted ~/.claude dir —
+  # ONLY these onboarding flags, never any history/projects.
+  docker exec "$c" bash -lc 'cat > /root/.claude.json <<JSON
+{"hasCompletedOnboarding":true,"lastOnboardingVersion":"2.1.160","theme":"dark","hasCompletedClaudeInChromeOnboarding":true}
+JSON'
   date +%s > "$STATE/$arm/started_at"   # wall-time clock (rubric: time spent)
   # start claude INTERACTIVELY in a detached tmux session.
   docker exec -d "$c" tmux new-session -d -s "$SESSION" -x 220 -y 50 \
     'cd /work && claude --dangerously-skip-permissions; exec bash'
-  sleep 2
+  # First-launch dialogs (theme is pre-seeded away): trust-folder → Enter;
+  # bypass-permissions warning → Down, Enter. Deterministic on first run; an
+  # empty Enter on the main prompt is harmless if a dialog isn't shown.
+  sleep 6;  docker exec "$c" tmux send-keys -t "$SESSION" Enter
+  sleep 3;  docker exec "$c" tmux send-keys -t "$SESSION" Down
+  sleep 1;  docker exec "$c" tmux send-keys -t "$SESSION" Enter
+  sleep 3
   echo "up: $arm → container $c, claude in tmux '$SESSION'. peek with: ./arena.sh peek $arm"
 }
 
@@ -95,7 +126,7 @@ cmd_report() {
 
 cmd_send() { docker exec "$(cname "$1")" tmux send-keys -t "$SESSION" -- "$2"; docker exec "$(cname "$1")" tmux send-keys -t "$SESSION" Enter; }
 cmd_keys() { docker exec "$(cname "$1")" tmux send-keys -t "$SESSION" "$2"; }
-cmd_peek() { docker exec "$(cname "$1")" tmux capture-pane -t "$SESSION" -p | tail -n "${2:-60}"; }
+cmd_peek() { docker exec "$(cname "$1")" tmux capture-pane -t "$SESSION" -p | sed 's/\x1b\[[0-9;]*m//g' | tail -n "${2:-60}"; }
 cmd_artifacts() { docker cp "$(cname "$1"):/work/." "$2"; echo "copied /work → $2"; }
 cmd_down() { docker rm -f "$(cname "$1")" >/dev/null 2>&1 && echo "down: $1"; }
 cmd_ls() { docker ps --filter "name=arena-" --format '{{.Names}}\t{{.Status}}'; }
