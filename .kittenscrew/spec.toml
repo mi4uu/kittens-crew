@@ -81,7 +81,7 @@ text = "`kittenscrew plan resolve` → ∀ §T task ! appears in exactly 1 posit
 
 [[invariant]]
 id = "V5"
-text = "`kittenscrew kitty says` output ! includes kitty emoji + `[Name]` prefix + raw message — no mutation of message"
+text = "`kittenscrew kitty says` output ! = role-coloured frame `▌` + sentiment emotion-emoji (😿/😾/😺/😻/🙀/😼, derived from the message) + role emoji + `[Name]` + raw message — colour from role, emotion from message, message itself never mutated"
 
 [[invariant]]
 id = "V6"
