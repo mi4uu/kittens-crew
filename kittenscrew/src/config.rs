@@ -20,6 +20,29 @@ pub struct Config {
     pub guard: GuardCfg,
     pub audit: AuditCfg,
     pub compression: CompressionCfg,
+    pub driver: DriverCfg,
+}
+
+/// `[driver]` — the autonomous Stop-hook driver (T52, V34). OFF by default: a
+/// Stop hook that blocks every turn-end would hijack normal interactive use, so
+/// installing the membrane never auto-drives until you opt in. When on, the
+/// driver is HARD-bounded by `max_iters` consecutive auto-iterations (⊥ runaway)
+/// and escalates to the real user on any flagged variance (V27).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DriverCfg {
+    /// Drive the plan forward on turn-end without waiting for the user.
+    pub autonomous: bool,
+    /// Hard cap on consecutive auto-iterations before yielding to the user.
+    pub max_iters: u32,
+}
+impl Default for DriverCfg {
+    fn default() -> Self {
+        DriverCfg {
+            autonomous: false,
+            max_iters: 8,
+        }
+    }
 }
 
 /// `[compression]` — the per content-class level policy (T49, V32). kittenscrew

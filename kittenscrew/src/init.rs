@@ -26,6 +26,7 @@ pub const MEMBRANE: &[(&str, &str, &str)] = &[
     ("UserPromptSubmit", "user-prompt", ""),
     ("PreToolUse", "pre-tool", ""),
     ("PostToolUse", "post-tool", ""),
+    ("Stop", "stop", ""),
     ("PreCompact", "pre-compact", ""),
 ];
 

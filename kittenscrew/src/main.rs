@@ -12,6 +12,7 @@ mod compression;
 mod config;
 mod docs;
 mod drift;
+mod driver;
 mod init;
 mod intake;
 mod plan;
@@ -946,6 +947,7 @@ mod hook {
             "user-prompt" => user_prompt(&stdin),
             "pre-tool" => pre_tool(&stdin),
             "post-tool" => post_tool(&stdin),
+            "stop" => stop(&stdin),
             "pre-compact" => pre_compact(&stdin),
             other => Err(KittenError::Validation(format!(
                 "unknown hook event: {other}"
@@ -958,6 +960,8 @@ mod hook {
     /// `additionalContext`. Deterministic; the LLM resolves any flagged ambiguity.
     /// Graceful: a malformed/empty payload still emits valid (if sparse) context.
     fn user_prompt(stdin: &str) -> Result<(), KittenError> {
+        // A genuine human turn refills the driver's auto-iteration budget (T52).
+        driver::State::reset();
         let prompt = serde_json::from_str::<serde_json::Value>(stdin)
             .ok()
             .and_then(|v| v.get("prompt").and_then(|p| p.as_str()).map(str::to_owned))
@@ -1012,6 +1016,86 @@ mod hook {
             None => {
                 // V2: graceful degrade — warn but don't fail.
                 eprintln!("kittenscrew: warning: squeez not found, compression disabled");
+            }
+        }
+        Ok(())
+    }
+
+    /// T52: Stop — the autonomous driver (V34). Default-OFF: with `[driver]
+    /// autonomous=false` (or outside a kittenscrew project) the hook allows the
+    /// stop silently — installing the membrane never hijacks an interactive
+    /// session. When ON: verify the turn's work (`check done` demote, V19), audit
+    /// variance, then `driver::decide` — drive on (block-stop + inject), yield, or
+    /// escalate to the user. Hard-bounded by `[driver] max_iters` (⊥ runaway).
+    fn stop(stdin: &str) -> Result<(), KittenError> {
+        let cfg = config::load().unwrap_or_default();
+        // Fast, safe path: no output = allow the stop.
+        if !cfg.driver.autonomous || !driver::has_store() {
+            return Ok(());
+        }
+        let _active = driver::stop_hook_active(stdin); // telemetry; bound is max_iters
+
+        let store_path = std::path::Path::new(store::STORE_PATH);
+        let mut s = store::Store::load(store_path)?;
+
+        // 1. Verify the turn's delivery: demote any `x` that's fake (V19). Only
+        //    persist the re-render when SPEC.md is in sync (T47: ⊥ clobber a
+        //    pending manual edit); otherwise the demote stays in-memory for the
+        //    decision and the user reconciles via `spec drift --apply`.
+        let demote: Vec<String> = check::check_done(&s)
+            .into_iter()
+            .filter(|r| !r.ok)
+            .map(|r| r.id)
+            .collect();
+        if !demote.is_empty() {
+            for t in s.tasks.iter_mut() {
+                if demote.contains(&t.id) {
+                    t.status = store::Status::Wip;
+                }
+            }
+            let on_disk = std::fs::read_to_string(SPEC_PATH).unwrap_or_default();
+            if on_disk.is_empty() || spec::is_synced(&s, &on_disk) {
+                s.save(store_path)?;
+                std::fs::write(SPEC_PATH, spec::render(&s))?;
+            }
+        }
+
+        // 2. Audit cadence: flag tasks whose delivered value missed expectation.
+        let flagged: Vec<String> = check::value_variance(&s, cfg.audit.variance_threshold)
+            .into_iter()
+            .filter(|r| r.flagged)
+            .map(|r| r.id)
+            .collect();
+
+        // 3. Decide on the next move.
+        let wp = worth_params();
+        let next = plan::next_with(&s, &wp).map(|t| (t.id.clone(), t.task.clone()));
+        let state = driver::State::load();
+        let decision = driver::decide(
+            &cfg.driver,
+            &state,
+            &flagged,
+            next.as_ref().map(|(i, t)| (i.as_str(), t.as_str())),
+        );
+
+        let k = kitty::lookup("orchestrating").expect("orchestrating kitty");
+        match decision {
+            driver::Decision::DriveOn { context } => {
+                let _ = driver::State {
+                    iters: state.iters + 1,
+                }
+                .save();
+                // Stop-hook contract: block the stop, feed `reason` as next input.
+                let payload = serde_json::json!({ "decision": "block", "reason": context });
+                println!("{payload}");
+            }
+            driver::Decision::Halt { reason } => {
+                driver::State::reset();
+                eprintln!("{} [{}] driver yields: {reason}", k.emoji, k.name);
+            }
+            driver::Decision::Escalate { packet } => {
+                driver::State::reset();
+                eprintln!("{} [{}] ESCALATE → {packet}", k.emoji, k.name);
             }
         }
         Ok(())
