@@ -377,10 +377,30 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
     }
 }
 
+/// Build worth knobs from `[plan]` config; malformed/absent config → defaults.
+fn worth_params() -> plan::WorthParams {
+    let cfg = config::load().unwrap_or_default().plan;
+    plan::WorthParams {
+        gamma: cfg.discount,
+        portfolio_w: cfg.portfolio_weight,
+        agg: match cfg.forward_agg.as_str() {
+            "max" => plan::Agg::Max,
+            "sum" => plan::Agg::Sum,
+            _ => plan::Agg::Hybrid,
+        },
+        rank_by: match cfg.rank_by.as_str() {
+            "worth" => plan::RankBy::Worth,
+            "roi" => plan::RankBy::Roi,
+            _ => plan::RankBy::Expected,
+        },
+    }
+}
+
 fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
     use std::path::Path;
     let store_path = Path::new(store::STORE_PATH);
     let s = store::Store::load(store_path)?;
+    let wp = worth_params(); // T41: [plan] config knobs (defaults if absent)
     let json = |v: &serde_json::Value| println!("{}", serde_json::to_string_pretty(v).unwrap());
     match action {
         PlanAction::Resolve => match plan::topo(&s) {
@@ -399,7 +419,7 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
             Ok(())
         }
         PlanAction::Next => {
-            match plan::next(&s) {
+            match plan::next_with(&s, &wp) {
                 Some(t) => json(&serde_json::json!({ "next": t.id, "task": t.task })),
                 None => json(&serde_json::json!({ "next": null })),
             }
@@ -420,12 +440,12 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
             Ok(())
         }
         PlanAction::Alternatives => {
-            let a = plan::alternatives(&s);
+            let a = plan::alternatives_with(&s, &wp);
             println!("{}", serde_json::to_string_pretty(&a).unwrap());
             Ok(())
         }
         PlanAction::Worth => {
-            let rows = plan::worth_ranking(&s);
+            let rows = plan::worth_ranking_with(&s, &wp);
             println!("{}", serde_json::to_string_pretty(&rows).unwrap());
             Ok(())
         }

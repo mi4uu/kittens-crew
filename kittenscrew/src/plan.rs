@@ -25,16 +25,55 @@ fn is_open(t: &Task) -> bool {
     matches!(t.status, Status::Todo | Status::Wip)
 }
 
-// ---- worth / ranking (T40, V22/V24) ---------------------------------------
-// Defaults; become `[plan]` config knobs in T41.
-const GAMMA: f64 = 0.85; // forward discount γ
-const PORTFOLIO_W: f64 = 0.30; // hybrid: max(children) + PORTFOLIO_W·Σ(children)
+// ---- worth / ranking (T40, V22/V24; knobs T41/V24) -------------------------
 
-/// `worth` per task (V24): `worth = value + γ·forward`, where
-/// `forward = max(worth children) + PORTFOLIO_W·Σ(worth children)` and a
-/// task's children are its direct dependents (tasks listing it in `deps`).
-/// Deterministic memoized DP over the DAG, O(V+E) (V20).
+/// How the forward (downstream) term aggregates child worths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Agg {
+    Max,    // critical-path: deepest single chain
+    Sum,    // portfolio: total downstream value
+    Hybrid, // max + portfolio_w·sum (default)
+}
+
+/// Which metric `rank` exposes for ordering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RankBy {
+    Worth,    // raw worth
+    Roi,      // worth / difficulty
+    Expected, // roi · (1 − risk/6) (default)
+}
+
+/// `[plan]` knobs feeding worth/rank (T41). Defaults reproduce the T40 behaviour
+/// exactly, so unconfigured projects (and tests) are unchanged.
+#[derive(Debug, Clone, Copy)]
+pub struct WorthParams {
+    pub gamma: f64,
+    pub portfolio_w: f64,
+    pub agg: Agg,
+    pub rank_by: RankBy,
+}
+
+impl Default for WorthParams {
+    fn default() -> Self {
+        WorthParams {
+            gamma: 0.85,
+            portfolio_w: 0.30,
+            agg: Agg::Hybrid,
+            rank_by: RankBy::Expected,
+        }
+    }
+}
+
+/// `worth` per task (V24) with default knobs.
+// kitten: default-param convenience used by tests; main always passes config knobs.
+#[allow(dead_code)]
 pub fn worth_map(s: &Store) -> HashMap<String, f64> {
+    worth_map_with(s, &WorthParams::default())
+}
+
+/// `worth` per task (V24): `worth = value + γ·forward`, `forward` aggregated per
+/// `params.agg`; children = direct dependents. Memoized DP, O(V+E) (V20).
+pub fn worth_map_with(s: &Store, p: &WorthParams) -> HashMap<String, f64> {
     let ids: HashSet<&str> = s.tasks.iter().map(|t| t.id.as_str()).collect();
     let mut dependents: HashMap<&str, Vec<&str>> = HashMap::new();
     for t in &s.tasks {
@@ -54,7 +93,7 @@ pub fn worth_map(s: &Store) -> HashMap<String, f64> {
         .collect();
     let mut memo: HashMap<String, f64> = HashMap::new();
     for t in &s.tasks {
-        worth_of(t.id.as_str(), &dependents, &value_of, &mut memo);
+        worth_of(t.id.as_str(), &dependents, &value_of, p, &mut memo);
     }
     memo
 }
@@ -63,6 +102,7 @@ fn worth_of(
     id: &str,
     dependents: &HashMap<&str, Vec<&str>>,
     value_of: &HashMap<&str, f64>,
+    p: &WorthParams,
     memo: &mut HashMap<String, f64>,
 ) -> f64 {
     if let Some(&w) = memo.get(id) {
@@ -72,23 +112,36 @@ fn worth_of(
     let children = dependents.get(id).cloned().unwrap_or_default();
     let child_worths: Vec<f64> = children
         .iter()
-        .map(|c| worth_of(c, dependents, value_of, memo))
+        .map(|c| worth_of(c, dependents, value_of, p, memo))
         .collect();
     let maxw = child_worths.iter().copied().fold(0.0, f64::max);
     let sumw: f64 = child_worths.iter().sum();
-    let forward = maxw + PORTFOLIO_W * sumw;
-    let w = value_of.get(id).copied().unwrap_or(0.0) + GAMMA * forward;
+    let forward = match p.agg {
+        Agg::Max => maxw,
+        Agg::Sum => sumw,
+        Agg::Hybrid => maxw + p.portfolio_w * sumw,
+    };
+    let w = value_of.get(id).copied().unwrap_or(0.0) + p.gamma * forward;
     memo.insert(id.to_string(), w);
     w
 }
 
-/// Rank = ROI risk-adjusted: `(worth/difficulty)·(1 − risk/6)`. Higher = do first.
-/// Difficulty floors at 1 (unscored → neutral). A filler (value 0, no dependents)
-/// → worth 0 → rank 0, sinks regardless of how cheap it is (V22).
+/// Rank with default knobs.
+#[allow(dead_code)] // default-param convenience (tests); main passes config knobs.
 pub fn rank_of(t: &Task, worth: &HashMap<String, f64>) -> f64 {
+    rank_of_with(t, worth, &WorthParams::default())
+}
+
+/// Rank per `params.rank_by`: worth | ROI (worth/difficulty) | expected
+/// (ROI·(1−risk/6)). Difficulty floors at 1. A filler (worth 0) → rank 0 (V22).
+pub fn rank_of_with(t: &Task, worth: &HashMap<String, f64>, p: &WorthParams) -> f64 {
     let w = worth.get(&t.id).copied().unwrap_or(0.0);
     let diff = t.difficulty.max(1) as f64;
-    (w / diff) * (1.0 - (t.risk as f64) / 6.0)
+    match p.rank_by {
+        RankBy::Worth => w,
+        RankBy::Roi => w / diff,
+        RankBy::Expected => (w / diff) * (1.0 - (t.risk as f64) / 6.0),
+    }
 }
 
 fn rank_cmp(a: f64, b: f64) -> std::cmp::Ordering {
@@ -109,8 +162,13 @@ pub struct WorthRow {
 }
 
 /// All tasks scored, highest rank first. `ready` flags the actionable frontier.
+#[allow(dead_code)] // default-param convenience (tests); main passes config knobs.
 pub fn worth_ranking(s: &Store) -> Vec<WorthRow> {
-    let worth = worth_map(s);
+    worth_ranking_with(s, &WorthParams::default())
+}
+
+pub fn worth_ranking_with(s: &Store, p: &WorthParams) -> Vec<WorthRow> {
+    let worth = worth_map_with(s, p);
     let ready_ids: HashSet<&str> = ready(s).iter().map(|t| t.id.as_str()).collect();
     let mut rows: Vec<WorthRow> = s
         .tasks
@@ -122,7 +180,7 @@ pub fn worth_ranking(s: &Store) -> Vec<WorthRow> {
             difficulty: t.difficulty,
             risk: t.risk,
             worth: round2(worth.get(&t.id).copied().unwrap_or(0.0)),
-            rank: round2(rank_of(t, &worth)),
+            rank: round2(rank_of_with(t, &worth, p)),
             ready: ready_ids.contains(t.id.as_str()),
         })
         .collect();
@@ -149,11 +207,16 @@ pub fn ready(s: &Store) -> Vec<&Task> {
 /// Single best next task: highest `rank` (worth-weighted) among READY, tiebreak
 /// priority then id (V22 — ⊥ pure cheapness/id). Falls back to id order when no
 /// task carries value (rank all 0), preserving old behaviour on unscored specs.
+#[allow(dead_code)] // default-param convenience (tests); main passes config knobs.
 pub fn next(s: &Store) -> Option<&Task> {
-    let worth = worth_map(s);
+    next_with(s, &WorthParams::default())
+}
+
+pub fn next_with<'a>(s: &'a Store, p: &WorthParams) -> Option<&'a Task> {
+    let worth = worth_map_with(s, p);
     let mut r = ready(s);
     r.sort_by(|a, b| {
-        rank_cmp(rank_of(a, &worth), rank_of(b, &worth))
+        rank_cmp(rank_of_with(a, &worth, p), rank_of_with(b, &worth, p))
             .then(a.priority.cmp(&b.priority))
             .then(id_num(&a.id).cmp(&id_num(&b.id)))
     });
@@ -370,8 +433,13 @@ pub struct AltRoute {
 /// T36 — at the current frontier, each available choice with its payoff:
 /// scope delivered, how many tasks it frees now, how many it gates downstream.
 /// Sorted by unblocks desc (highest leverage first).
+#[allow(dead_code)] // default-param convenience (tests); main passes config knobs.
 pub fn alternatives(s: &Store) -> Vec<AltRoute> {
-    let worth = worth_map(s);
+    alternatives_with(s, &WorthParams::default())
+}
+
+pub fn alternatives_with(s: &Store, p: &WorthParams) -> Vec<AltRoute> {
+    let worth = worth_map_with(s, p);
     let mut out: Vec<AltRoute> = ready(s)
         .into_iter()
         .map(|t| {
@@ -383,7 +451,7 @@ pub fn alternatives(s: &Store) -> Vec<AltRoute> {
                 unblocks: imp.unblocks.len(),
                 blocks: imp.blocks.len(),
                 worth: round2(worth.get(&t.id).copied().unwrap_or(0.0)),
-                rank: round2(rank_of(t, &worth)),
+                rank: round2(rank_of_with(t, &worth, p)),
             }
         })
         .collect();
@@ -562,5 +630,76 @@ mod tests {
         // T1 (filler) ranks last among the three despite lowest id.
         assert_eq!(rows.last().unwrap().id, "T1");
         assert_eq!(rows.first().unwrap().id, "T2"); // highest rank of the ready pair
+    }
+
+    #[test]
+    fn rank_by_knob_selects_metric() {
+        let s = Store {
+            tasks: vec![Task {
+                id: "T1".into(),
+                status: Status::Todo,
+                value: 10,
+                difficulty: 2,
+                risk: 3,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let w = worth_map(&s); // no children → worth = value = 10
+        let t = &s.tasks[0];
+        let knob = |rb| {
+            rank_of_with(
+                t,
+                &w,
+                &WorthParams {
+                    rank_by: rb,
+                    ..Default::default()
+                },
+            )
+        };
+        assert_eq!(knob(RankBy::Worth), 10.0);
+        assert_eq!(knob(RankBy::Roi), 5.0); // 10/2
+        assert!((knob(RankBy::Expected) - 2.5).abs() < 1e-9); // 5·(1−3/6)
+    }
+
+    #[test]
+    fn agg_sum_vs_max_diverge_with_multiple_children() {
+        // T0 has two dependents T1(v2) T2(v4); max=4, sum=6 → forward differs.
+        let s = Store {
+            tasks: vec![
+                Task {
+                    id: "T0".into(),
+                    status: Status::Todo,
+                    value: 0,
+                    ..Default::default()
+                },
+                Task {
+                    id: "T1".into(),
+                    status: Status::Todo,
+                    value: 2,
+                    deps: vec!["T0".into()],
+                    ..Default::default()
+                },
+                Task {
+                    id: "T2".into(),
+                    status: Status::Todo,
+                    value: 4,
+                    deps: vec!["T0".into()],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let pmax = WorthParams {
+            agg: Agg::Max,
+            ..Default::default()
+        };
+        let psum = WorthParams {
+            agg: Agg::Sum,
+            ..Default::default()
+        };
+        let max = worth_map_with(&s, &pmax)["T0"]; // 0.85·max(4,2)=3.4
+        let sum = worth_map_with(&s, &psum)["T0"]; // 0.85·(4+2)=5.1
+        assert!(sum > max);
     }
 }

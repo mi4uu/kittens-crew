@@ -53,7 +53,7 @@ interfaces = [
     "cmd: `kittenscrew score` → JSON graded conformance: {overall, dims:[{name, pct, detail}]} (interface-completeness, check-done-pass, dep-coverage, value-coverage, sync) — convergence metric, ⊥ binary",
     "cmd: `kittenscrew config show` → resolved `kittenscrew.toml` (defaults if absent) → JSON",
     "cmd: `kittenscrew init` → writes `kittenscrew.toml` template, registers hooks in `~/.claude/settings.json`",
-    "file: `kittenscrew.toml` schema → `[kitty] compression_level`, `[hooks] pre, post, session, compact`, `[docs] auto_generate, detail (terse|normal|explain), target (dev|idiot)`, `[plan] strict_ordering`, `[guard] blocked_cmds=[…]`",
+    "file: `kittenscrew.toml` schema → `[kitty] compression_level`, `[hooks] pre, post, session, compact`, `[docs] auto_generate, detail (terse|normal|explain), target (dev|idiot)`, `[plan] strict_ordering, forward_agg (max|sum|hybrid), discount, portfolio_weight, rank_by (worth|roi|expected)`, `[guard] blocked_cmds=[…]`",
     "env: `KITTENSCREW_CONFIG` → path to config (default `./kittenscrew.toml`)",
     "env: `SQUEEZ_BIN` → path to squeez binary (default auto-detect)",
 ]
@@ -754,7 +754,7 @@ risk = 0
 
 [[task]]
 id = "T41"
-status = "todo"
+status = "done"
 task = "`[plan]` config: forward_agg(max|sum|hybrid), discount γ, portfolio_weight, rank_by(worth|roi|expected)"
 deps = [
     "T15",

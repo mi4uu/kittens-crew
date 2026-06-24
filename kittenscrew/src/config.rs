@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 /// Resolved per-project config. Every field defaults, so a missing file or a
 /// partial table is always valid.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct Config {
     pub kitty: KittyCfg,
@@ -64,11 +64,30 @@ impl Default for DocsCfg {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PlanCfg {
     /// Enforce a single linear order instead of the parallel READY frontier.
     pub strict_ordering: bool,
+    /// Forward aggregation: max | sum | hybrid (T41/V24).
+    pub forward_agg: String,
+    /// Discount γ on the forward (downstream) term.
+    pub discount: f64,
+    /// Hybrid weight on the portfolio (Σ) part.
+    pub portfolio_weight: f64,
+    /// Rank metric: worth | roi | expected.
+    pub rank_by: String,
+}
+impl Default for PlanCfg {
+    fn default() -> Self {
+        PlanCfg {
+            strict_ordering: false,
+            forward_agg: "hybrid".into(),
+            discount: 0.85,
+            portfolio_weight: 0.30,
+            rank_by: "expected".into(),
+        }
+    }
 }
 
 /// `pre-tool` guard: commands that must be blocked (T24, exit 2 on match).
