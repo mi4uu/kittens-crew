@@ -156,6 +156,52 @@ pub fn check_done(store: &Store) -> Vec<TaskReport> {
         .collect()
 }
 
+/// The "is it WORTH what we thought?" loop (T42, V25): for each done+scored task
+/// that has a self-eval, compare delivered (`satisfaction·conformance/5`,
+/// re-normalised to the 1-5 value scale) against the authored `value`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct VarianceRow {
+    pub id: String,
+    pub expected: i64,
+    pub delivered: f64,
+    pub variance: f64, // signed: (delivered − expected) / expected
+    pub direction: String,
+    pub flagged: bool,
+}
+
+pub fn value_variance(store: &Store, threshold: f64) -> Vec<VarianceRow> {
+    store
+        .tasks
+        .iter()
+        .filter(|t| t.status == Status::Done && t.value > 0)
+        .filter_map(|t| t.eval.as_ref().map(|ev| (t, ev)))
+        .map(|(t, ev)| {
+            let expected = t.value as f64;
+            let delivered = (ev.satisfaction * ev.conformance) as f64 / 5.0;
+            let variance = (delivered - expected) / expected;
+            let direction = if variance < -1e-9 {
+                "under"
+            } else if variance > 1e-9 {
+                "over"
+            } else {
+                "ok"
+            };
+            VarianceRow {
+                id: t.id.clone(),
+                expected: t.value,
+                delivered: round2(delivered),
+                variance: round2(variance),
+                direction: direction.into(),
+                flagged: variance.abs() > threshold,
+            }
+        })
+        .collect()
+}
+
+fn round2(x: f64) -> f64 {
+    (x * 100.0).round() / 100.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,6 +219,40 @@ mod tests {
             note: String::new(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn value_variance_flags_underdelivery() {
+        use crate::store::TaskEval;
+        let mut s = Store::default();
+        // expected 4; delivered = 2·2/5 = 0.8 → variance −0.8 → flagged under.
+        let mut under = task("T1", &[]);
+        under.value = 4;
+        under.eval = Some(TaskEval {
+            satisfaction: 2,
+            conformance: 2,
+            tokens: 0,
+            note: String::new(),
+        });
+        // expected 4; delivered = 5·4/5 = 4 → variance 0 → ok.
+        let mut ok = task("T2", &[]);
+        ok.value = 4;
+        ok.eval = Some(TaskEval {
+            satisfaction: 5,
+            conformance: 4,
+            tokens: 0,
+            note: String::new(),
+        });
+        // scored but no eval → excluded.
+        let mut no_eval = task("T3", &[]);
+        no_eval.value = 3;
+        s.tasks = vec![under, ok, no_eval];
+        let rows = value_variance(&s, 0.3);
+        assert_eq!(rows.len(), 2); // T3 excluded (no eval)
+        let r1 = rows.iter().find(|r| r.id == "T1").unwrap();
+        assert!(r1.flagged && r1.direction == "under");
+        let r2 = rows.iter().find(|r| r.id == "T2").unwrap();
+        assert!(!r2.flagged && r2.direction == "ok");
     }
 
     #[test]

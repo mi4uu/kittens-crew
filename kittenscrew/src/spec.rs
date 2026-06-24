@@ -554,6 +554,14 @@ fn apply_edit(store: &mut Store, p: &serde_json::Value) -> Result<(), String> {
     if let Some(r) = pint(p, "risk") {
         t.risk = r;
     }
+    if let Some(ev) = p.get("eval") {
+        t.eval = Some(crate::store::TaskEval {
+            satisfaction: pint(ev, "satisfaction").unwrap_or(0),
+            conformance: pint(ev, "conformance").unwrap_or(0),
+            tokens: pint(ev, "tokens").unwrap_or(0),
+            note: pstr(ev, "note").unwrap_or_default(),
+        });
+    }
     Ok(())
 }
 

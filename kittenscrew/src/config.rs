@@ -18,6 +18,31 @@ pub struct Config {
     pub docs: DocsCfg,
     pub plan: PlanCfg,
     pub guard: GuardCfg,
+    pub audit: AuditCfg,
+}
+
+/// `[audit]` — cadence + thresholds for the cyclic re-eval loops (T42, V25).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AuditCfg {
+    /// Run the audit every N completed tasks (0 = off).
+    pub recheck_every_tasks: u32,
+    /// Run the audit every N build iterations (0 = off).
+    pub recheck_every_iters: u32,
+    /// |delivered − expected| / expected above this flags a task (0-1).
+    pub variance_threshold: f64,
+    /// What to do when aggregate variance trips: report | brainstorm | halt.
+    pub on_variance: String,
+}
+impl Default for AuditCfg {
+    fn default() -> Self {
+        AuditCfg {
+            recheck_every_tasks: 5,
+            recheck_every_iters: 0,
+            variance_threshold: 0.3,
+            on_variance: "report".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

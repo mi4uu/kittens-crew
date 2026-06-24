@@ -110,6 +110,8 @@ enum SpecAction {
 enum CheckAction {
     /// Re-verify every `x` task; demote `x`→`~` on fake-delivery or broken cites.
     Done,
+    /// value-variance (T42): delivered (eval) vs expected (value) per done task.
+    Variance,
 }
 
 #[derive(Subcommand, Debug)]
@@ -470,6 +472,43 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
 fn check_cmd(action: CheckAction) -> Result<(), KittenError> {
     use std::path::Path;
     match action {
+        CheckAction::Variance => {
+            let s = store::Store::load(Path::new(store::STORE_PATH))?;
+            let cfg = config::load().unwrap_or_default().audit;
+            let rows = check::value_variance(&s, cfg.variance_threshold);
+            let k = kitty::lookup("memory").expect("memory kitty");
+            println!("{}", serde_json::to_string_pretty(&rows).unwrap());
+            let flagged: Vec<&str> = rows
+                .iter()
+                .filter(|r| r.flagged)
+                .map(|r| r.id.as_str())
+                .collect();
+            if flagged.is_empty() {
+                println!(
+                    "{} [{}] value-variance ok — {} eval'd task(s) within ±{}",
+                    k.emoji,
+                    k.name,
+                    rows.len(),
+                    cfg.variance_threshold
+                );
+                return Ok(());
+            }
+            println!(
+                "{} [{}] variance flagged: {} → on_variance={}",
+                k.emoji,
+                k.name,
+                flagged.join(","),
+                cfg.on_variance
+            );
+            // V25/V27: halt is a hard stop; brainstorm/report just surface it.
+            if cfg.on_variance == "halt" {
+                return Err(KittenError::Validation(format!(
+                    "{} task(s) past variance threshold — halt",
+                    flagged.len()
+                )));
+            }
+            Ok(())
+        }
         CheckAction::Done => {
             let store_path = Path::new(store::STORE_PATH);
             let mut s = store::Store::load(store_path)?;

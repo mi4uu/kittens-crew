@@ -45,6 +45,7 @@ North star: ⊥ just fewer tokens — move work DOWN the model-size ladder w/o q
 - cmd: `kittenscrew plan next` → stdout: single next §T.id (ready, lowest priority then id)
 - cmd: `kittenscrew plan blocking <id>` → stdout: tasks blocked by `<id>` (reverse-dep query)
 - cmd: `kittenscrew check done` → stdout: per `x` task {id, ok|fail, markers, broken_cites}; demotes failed `x`→`~` (V18,V19)
+- cmd: `kittenscrew check variance` → stdout: per eval'd done task {id, expected, delivered, variance, direction, flagged}; `[audit] on_variance=halt` → exit 2 (V25)
 - cmd: `kittenscrew spec render` → regenerate SPEC.md from `.kittenscrew/spec.toml`
 - cmd: `kittenscrew spec import` → parse SPEC.md → `.kittenscrew/spec.toml` (bootstrap / re-sync after manual edit)
 - cmd: `kittenscrew spec drift [--apply]` → diff edited SPEC.md vs store projection → report {task_added,removed,changed, prose_changed}; `--apply` reconciles structural + carries toml-only fields + re-renders (V16)
@@ -58,7 +59,7 @@ North star: ⊥ just fewer tokens — move work DOWN the model-size ladder w/o q
 - cmd: `kittenscrew score` → JSON graded conformance: {overall, dims:[{name, pct, detail}]} (interface-completeness, check-done-pass, dep-coverage, value-coverage, sync) — convergence metric, ⊥ binary
 - cmd: `kittenscrew config show` → resolved `kittenscrew.toml` (defaults if absent) → JSON
 - cmd: `kittenscrew init` → writes `kittenscrew.toml` template, registers hooks in `~/.claude/settings.json`
-- file: `kittenscrew.toml` schema → `[kitty] compression_level`, `[hooks] pre, post, session, compact`, `[docs] auto_generate, detail (terse|normal|explain), target (dev|idiot)`, `[plan] strict_ordering, forward_agg (max|sum|hybrid), discount, portfolio_weight, rank_by (worth|roi|expected)`, `[guard] blocked_cmds=[…]`
+- file: `kittenscrew.toml` schema → `[kitty] compression_level`, `[hooks] pre, post, session, compact`, `[docs] auto_generate, detail (terse|normal|explain), target (dev|idiot)`, `[plan] strict_ordering, forward_agg (max|sum|hybrid), discount, portfolio_weight, rank_by (worth|roi|expected)`, `[audit] recheck_every_tasks, recheck_every_iters, variance_threshold, on_variance (report|brainstorm|halt)`, `[guard] blocked_cmds=[…]`
 - env: `KITTENSCREW_CONFIG` → path to config (default `./kittenscrew.toml`)
 - env: `SQUEEZ_BIN` → path to squeez binary (default auto-detect)
 
@@ -140,7 +141,7 @@ T38|∅|store `text_unrolled` field (expanded copy in toml)|-|-   (ladder: dual-
 T39|x|extend Task schema: `value`/`difficulty`/`risk` (1-5, @creation) + `[task.eval]` `satisfaction`/`conformance`/`tokens` (@done); serde defaults → backward-compat|-|V23
 T40|x|compute `worth`/`ROI` (V24 formula) + re-rank `plan next`/`alternatives` by worth → ⊥ leverage/id; tiebreak priority|T39|V22,V24
 T41|x|`[plan]` config: forward_agg(max\|sum\|hybrid), discount γ, portfolio_weight, rank_by(worth\|roi\|expected)|T15,T39|V24
-T42|.|`value-variance` audit cmd + `[audit]` cadence (recheck_every_tasks/iters, variance_threshold, on_variance=report\|brainstorm\|halt)|T30,T39|V25
+T42|x|`value-variance` audit cmd + `[audit]` cadence (recheck_every_tasks/iters, variance_threshold, on_variance=report\|brainstorm\|halt)|T30,T39|V25
 T43|.|deliberation pipeline engine: primitives {brainstorm,research,evaluate,ask}, config-composed pipe, fixed-size bricks (default ~3 agents×5 turns, scale by composition), Rust referee/orchestrator + ANY-agent LLM roster (Claude/Pi/…, ⊥ CC-specific), ask=user-choice exit packet|T41,T42|V26,V27
 T44|.|`kittenscrew review` — assemble diff + ONLY relevant spec fragment + role prompt → call config'd remote agent(s) (OpenRouter via curl, 0-dep) → collect few-sentence notes/suggestions → feed deliberation (eval\|brainstorm\|ask). optional, advisory, absent-config=skip|T41|V26,V27,V29
 T45|.|interface-completeness gate: test §I declared cmds ⊆ binary clap subcommand tree (forge §I↔code drift lesson into deterministic floor)|-|V28

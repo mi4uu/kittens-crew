@@ -40,6 +40,7 @@ interfaces = [
     "cmd: `kittenscrew plan next` → stdout: single next §T.id (ready, lowest priority then id)",
     "cmd: `kittenscrew plan blocking <id>` → stdout: tasks blocked by `<id>` (reverse-dep query)",
     "cmd: `kittenscrew check done` → stdout: per `x` task {id, ok|fail, markers, broken_cites}; demotes failed `x`→`~` (V18,V19)",
+    "cmd: `kittenscrew check variance` → stdout: per eval'd done task {id, expected, delivered, variance, direction, flagged}; `[audit] on_variance=halt` → exit 2 (V25)",
     "cmd: `kittenscrew spec render` → regenerate SPEC.md from `.kittenscrew/spec.toml`",
     "cmd: `kittenscrew spec import` → parse SPEC.md → `.kittenscrew/spec.toml` (bootstrap / re-sync after manual edit)",
     "cmd: `kittenscrew spec drift [--apply]` → diff edited SPEC.md vs store projection → report {task_added,removed,changed, prose_changed}; `--apply` reconciles structural + carries toml-only fields + re-renders (V16)",
@@ -53,7 +54,7 @@ interfaces = [
     "cmd: `kittenscrew score` → JSON graded conformance: {overall, dims:[{name, pct, detail}]} (interface-completeness, check-done-pass, dep-coverage, value-coverage, sync) — convergence metric, ⊥ binary",
     "cmd: `kittenscrew config show` → resolved `kittenscrew.toml` (defaults if absent) → JSON",
     "cmd: `kittenscrew init` → writes `kittenscrew.toml` template, registers hooks in `~/.claude/settings.json`",
-    "file: `kittenscrew.toml` schema → `[kitty] compression_level`, `[hooks] pre, post, session, compact`, `[docs] auto_generate, detail (terse|normal|explain), target (dev|idiot)`, `[plan] strict_ordering, forward_agg (max|sum|hybrid), discount, portfolio_weight, rank_by (worth|roi|expected)`, `[guard] blocked_cmds=[…]`",
+    "file: `kittenscrew.toml` schema → `[kitty] compression_level`, `[hooks] pre, post, session, compact`, `[docs] auto_generate, detail (terse|normal|explain), target (dev|idiot)`, `[plan] strict_ordering, forward_agg (max|sum|hybrid), discount, portfolio_weight, rank_by (worth|roi|expected)`, `[audit] recheck_every_tasks, recheck_every_iters, variance_threshold, on_variance (report|brainstorm|halt)`, `[guard] blocked_cmds=[…]`",
     "env: `KITTENSCREW_CONFIG` → path to config (default `./kittenscrew.toml`)",
     "env: `SQUEEZ_BIN` → path to squeez binary (default auto-detect)",
 ]
@@ -774,9 +775,15 @@ value = 3
 difficulty = 2
 risk = 1
 
+[task.eval]
+satisfaction = 2
+conformance = 2
+tokens = 15000
+note = "knobs work but under-tested"
+
 [[task]]
 id = "T42"
-status = "todo"
+status = "done"
 task = "`value-variance` audit cmd + `[audit]` cadence (recheck_every_tasks/iters, variance_threshold, on_variance=report|brainstorm|halt)"
 deps = [
     "T30",
@@ -855,6 +862,12 @@ value = 4
 difficulty = 3
 risk = 2
 
+[task.eval]
+satisfaction = 4
+conformance = 4
+tokens = 9000
+note = "persistence clean"
+
 [[task]]
 id = "T47"
 status = "done"
@@ -883,6 +896,12 @@ note = ""
 value = 0
 difficulty = 0
 risk = 0
+
+[task.eval]
+satisfaction = 5
+conformance = 5
+tokens = 12000
+note = "score dims solid"
 
 [[bug]]
 id = "B1"
