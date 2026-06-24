@@ -22,6 +22,22 @@ pub struct Config {
     pub compression: CompressionCfg,
     pub driver: DriverCfg,
     pub gate: GateCfg,
+    pub helper: HelperCfg,
+}
+
+/// `[helper]` — the Helper Kitty (🐾). When on, SessionStart emits ONE framed
+/// line summarising plan progress (done/total + next task). Default ON: a quick
+/// "where am I" on every session start is cheap and orienting; silence when there
+/// is no plan store.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HelperCfg {
+    pub narrate: bool,
+}
+impl Default for HelperCfg {
+    fn default() -> Self {
+        HelperCfg { narrate: true }
+    }
 }
 
 /// `[gate]` — the plan-gate (T57). When on, the membrane blocks product-code

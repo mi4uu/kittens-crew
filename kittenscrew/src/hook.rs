@@ -126,7 +126,57 @@ fn session_start(_stdin: &str) -> Result<(), KittenError> {
             eprintln!("kittenscrew: warning: squeez not found, compression disabled");
         }
     }
+
+    // 🐾 Helper Kitty: narrate plan progress ONCE, if a plan store exists and
+    // narration is on. Absent/empty store → emit nothing (don't crash, don't
+    // narrate). Best-effort: an unreadable store is simply silent.
+    let cfg = config::load().unwrap_or_default();
+    if cfg.helper.narrate {
+        if let Ok(store) = store::Store::load(std::path::Path::new(store::STORE_PATH)) {
+            if !store.tasks.is_empty() {
+                let wp = worth_params();
+                let next = plan::next_with(&store, &wp).map(|t| (t.id.as_str(), t.task.as_str()));
+                let msg = helper_narration(&store, next);
+                let helper = kitty::lookup("helper").expect("helper kitty constant");
+                println!("{}", kitty::say(helper, &msg));
+            }
+        }
+    }
     Ok(())
+}
+
+/// Max chars of a task's text to show in the Helper's narration line.
+const NARRATE_SLICE: usize = 32;
+
+/// Build the Helper Kitty's one-line plan summary: `N/M tasks done · next: …`.
+/// done = tasks `Status::Done`; total = tasks not `Status::Killed`. `next` is the
+/// planner's pick (id + a short slice of its text); `None` → "plan complete"
+/// when all live work is done, else "no ready task" (frontier blocked).
+fn helper_narration(store: &store::Store, next: Option<(&str, &str)>) -> String {
+    let done = store
+        .tasks
+        .iter()
+        .filter(|t| t.status == store::Status::Done)
+        .count();
+    let total = store
+        .tasks
+        .iter()
+        .filter(|t| t.status != store::Status::Killed)
+        .count();
+    let tail = match next {
+        Some((id, task)) => {
+            let slice: String = task.chars().take(NARRATE_SLICE).collect();
+            let ellipsis = if task.chars().count() > NARRATE_SLICE {
+                " …"
+            } else {
+                ""
+            };
+            format!("next: {id} {slice}{ellipsis}")
+        }
+        None if done == total => "plan complete".to_string(),
+        None => "no ready task".to_string(),
+    };
+    format!("{done}/{total} tasks done · {tail}")
 }
 
 /// T52: Stop — the autonomous driver (V34). Default-OFF: with `[driver]
@@ -353,4 +403,74 @@ fn snapshot_plan() -> std::io::Result<()> {
 /// Currently empty (T15 will load config from kittenscrew.toml).
 fn check_blocked(_stdin: &str) -> Option<String> {
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn task(id: &str, status: store::Status) -> store::Task {
+        store::Task {
+            id: id.into(),
+            status,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn counts_done_over_non_killed_total() {
+        let store = store::Store {
+            tasks: vec![
+                task("T1", store::Status::Done),
+                task("T2", store::Status::Wip),
+                task("T3", store::Status::Todo),
+                task("T4", store::Status::Killed), // excluded from total
+            ],
+            ..Default::default()
+        };
+        let line = helper_narration(&store, Some(("T2", "init the engine")));
+        assert!(line.starts_with("1/3 tasks done · "), "got: {line}");
+        assert!(line.contains("next: T2 init the engine"), "got: {line}");
+    }
+
+    #[test]
+    fn long_task_text_is_sliced_with_ellipsis() {
+        let store = store::Store {
+            tasks: vec![task("T1", store::Status::Todo)],
+            ..Default::default()
+        };
+        let long = "a".repeat(NARRATE_SLICE + 10);
+        let line = helper_narration(&store, Some(("T1", &long)));
+        let expected_slice = "a".repeat(NARRATE_SLICE);
+        assert!(
+            line.contains(&format!("next: T1 {expected_slice} …")),
+            "got: {line}"
+        );
+    }
+
+    #[test]
+    fn no_next_all_done_says_plan_complete() {
+        let store = store::Store {
+            tasks: vec![
+                task("T1", store::Status::Done),
+                task("T2", store::Status::Killed),
+            ],
+            ..Default::default()
+        };
+        let line = helper_narration(&store, None);
+        assert_eq!(line, "1/1 tasks done · plan complete");
+    }
+
+    #[test]
+    fn no_next_with_pending_says_no_ready_task() {
+        let store = store::Store {
+            tasks: vec![
+                task("T1", store::Status::Done),
+                task("T2", store::Status::Todo), // pending but frontier blocked
+            ],
+            ..Default::default()
+        };
+        let line = helper_narration(&store, None);
+        assert_eq!(line, "1/2 tasks done · no ready task");
+    }
 }
