@@ -418,7 +418,7 @@ risk = 1
 
 [[task]]
 id = "T18"
-status = "todo"
+status = "done"
 task = "write `kittenscrew/tests/` integration tests (1 per §I command, assert exit codes per V1)"
 deps = ["T28"]
 priority = 0

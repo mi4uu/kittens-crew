@@ -117,7 +117,7 @@ T14|∅|impl `kittenscrew plan done <id>` → flip `.`→`x` in §T row, validat
 T15|x|impl `kittenscrew.toml` parser + defaults (compression_level, hooks list, docs.auto_generate)|T1|§I
 T16|.|impl `kittenscrew init` → write `kittenscrew.toml` template + register hooks in `~/.claude/settings.json`|T15|V6
 T17|x|add `kittenscrew` to PATH in `claudeoneprovider.sh` & `claudeopenrouter.sh`|T1|§C
-T18|.|write `kittenscrew/tests/` integration tests (1 per §I command, assert exit codes per V1)|T28|V1
+T18|x|write `kittenscrew/tests/` integration tests (1 per §I command, assert exit codes per V1)|T28|V1
 T19|.|write README.md section: install, hook wiring, `kittenscrew.toml` schema, command reference|T16|§I
 T20|∅|custom config format (YAML/JSON)|-|-   (ladder: TOML stdlib, no value in own format)
 T21|.|wrap `kittenscrew hook subagent-stop` → delegate squeez SubagentStop|T4|§C,V7
