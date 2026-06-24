@@ -21,6 +21,21 @@ pub struct Config {
     pub audit: AuditCfg,
     pub compression: CompressionCfg,
     pub driver: DriverCfg,
+    pub gate: GateCfg,
+}
+
+/// `[gate]` — the plan-gate (T57). When on, the membrane blocks product-code
+/// writes until a plan store exists (no plan → no work). Default ON: the engine's
+/// whole point is to enforce the discipline a weak model skips.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GateCfg {
+    pub enforce_plan: bool,
+}
+impl Default for GateCfg {
+    fn default() -> Self {
+        GateCfg { enforce_plan: true }
+    }
 }
 
 /// `[driver]` — the autonomous Stop-hook driver (T52, V34). OFF by default: a

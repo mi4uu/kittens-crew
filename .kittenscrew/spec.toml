@@ -58,7 +58,7 @@ interfaces = [
     "cmd: `kittenscrew config show` → resolved `kittenscrew.toml` (defaults if absent) → JSON",
     "cmd: `kittenscrew init` → writes `kittenscrew.toml` template, registers hooks in `~/.claude/settings.json`",
     "cmd: `kittenscrew compression policy` → class→squeez-level map as JSON; `compression level <class>` → level for prose|dump|structured|diff (exit 2 if unknown)",
-    "file: `kittenscrew.toml` schema → `[kitty] compression_level`, `[hooks] pre, post, session, compact`, `[docs] auto_generate, detail (terse|normal|explain), target (dev|idiot)`, `[plan] strict_ordering, forward_agg (max|sum|hybrid), discount, portfolio_weight, rank_by (worth|roi|expected)`, `[audit] recheck_every_tasks, recheck_every_iters, variance_threshold, on_variance (report|brainstorm|halt)`, `[guard] blocked_cmds=[…]`, `[compression] prose, dump, structured, diff (→ off|lite|full|ultra)`, `[driver] autonomous (bool, default false), max_iters (default 8)`",
+    "file: `kittenscrew.toml` schema → `[kitty] compression_level`, `[hooks] pre, post, session, compact`, `[docs] auto_generate, detail (terse|normal|explain), target (dev|idiot)`, `[plan] strict_ordering, forward_agg (max|sum|hybrid), discount, portfolio_weight, rank_by (worth|roi|expected)`, `[audit] recheck_every_tasks, recheck_every_iters, variance_threshold, on_variance (report|brainstorm|halt)`, `[guard] blocked_cmds=[…]`, `[compression] prose, dump, structured, diff (→ off|lite|full|ultra)`, `[driver] autonomous (bool, default false), max_iters (default 8)`, `[gate] enforce_plan (bool, default true) — PreToolUse blocks product-code writes until a plan store exists (T57, no plan→no work)`",
     "env: `KITTENSCREW_CONFIG` → path to config (default `./kittenscrew.toml`)",
     "env: `SQUEEZ_BIN` → path to squeez binary (default auto-detect)",
 ]
@@ -1064,7 +1064,7 @@ risk = 1
 
 [[task]]
 id = "T57"
-status = "todo"
+status = "done"
 task = "PLAN-GATE (no plan → no work): the membrane enforces plan-first. UserPromptSubmit: casual chatter (⊥ commands, user just says what they want) → cats LISTEN, intake distills intent → DRAFT plan (`spec apply`), ⊥ build directly like a chat window. Stop/PreToolUse: if no plan exists for the active work → block build, route to planning. Even if the user ⊥ asks, build the plan in the background + inform. Benchmark run#1 proof: kittens on Haiku built feedcat with ZERO plan/spec (never ran spec skill), cost 3.12M tok > baseline 2.66M — nothing forced plan-first"
 deps = [
     "T51",
