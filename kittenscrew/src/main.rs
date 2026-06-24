@@ -9,6 +9,7 @@ use std::process::{Command, ExitCode, Stdio};
 
 mod check;
 mod config;
+mod docs;
 mod drift;
 mod plan;
 mod score;
@@ -57,6 +58,11 @@ enum Cmd {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Per-task docs (T23): `docs task <id>` → `docs/<id>-<slug>.md` (V12, opt-in).
+    Docs {
+        #[command(subcommand)]
+        action: DocsAction,
+    },
     /// Init: write kittenscrew.toml + register hooks (T16).
     Init,
 }
@@ -65,6 +71,15 @@ enum Cmd {
 enum ConfigAction {
     /// Resolve `kittenscrew.toml` (defaults if absent) → JSON.
     Show,
+}
+
+#[derive(Subcommand, Debug)]
+enum DocsAction {
+    /// Write `docs/<id>-<slug>.md` for a task (only if `[docs] auto_generate`).
+    Task {
+        /// Task id (e.g. T9).
+        id: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -141,6 +156,8 @@ enum PlanAction {
     Alternatives,
     /// All tasks scored by worth/rank (value-weighted, V22/V24), highest first.
     Worth,
+    /// ASCII DAG render of tasks + deps (presentation-only, T32).
+    Graph,
     /// Mark task done (store → re-render SPEC.md projection).
     Done {
         /// Task id (e.g. T5).
@@ -170,6 +187,7 @@ fn run(cli: Cli) -> Result<(), KittenError> {
         Cmd::Check { action } => check_cmd(action),
         Cmd::Score => score_cmd(),
         Cmd::Config { action } => config_cmd(action),
+        Cmd::Docs { action } => docs_cmd(action),
         Cmd::Hook { event } => hook::dispatch(&event),
         Cmd::Init => init_stub(),
     }
@@ -451,6 +469,10 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
             println!("{}", serde_json::to_string_pretty(&rows).unwrap());
             Ok(())
         }
+        PlanAction::Graph => {
+            println!("{}", plan::graph(&s));
+            Ok(())
+        }
         PlanAction::Done { id } => {
             ensure_synced(&s)?; // T47: don't clobber a pending manual SPEC.md edit
             let mut s = s;
@@ -594,6 +616,34 @@ fn score_cmd() -> Result<(), KittenError> {
     let sc = score::conformance(&s, &binary_cmds(), synced);
     println!("{}", serde_json::to_string_pretty(&sc).unwrap());
     Ok(())
+}
+
+fn docs_cmd(action: DocsAction) -> Result<(), KittenError> {
+    use std::path::Path;
+    match action {
+        DocsAction::Task { id } => {
+            let cfg = config::load().unwrap_or_default().docs;
+            let k = kitty::lookup("scribe").unwrap_or_else(|| kitty::lookup("planning").unwrap());
+            // V12: ⊥ runs unless opted in. The cmd is the manual trigger; the
+            // [docs] auto_generate gate keeps it silent by default.
+            if !cfg.auto_generate {
+                eprintln!(
+                    "{} [{}] docs off ([docs] auto_generate=false) — skipped {id}",
+                    k.emoji, k.name
+                );
+                return Ok(());
+            }
+            let s = store::Store::load(Path::new(store::STORE_PATH))?;
+            let t = s
+                .task(&id)
+                .ok_or_else(|| KittenError::Validation(format!("unknown task {id}")))?;
+            let path = docs::doc_path(t);
+            std::fs::create_dir_all("docs")?;
+            std::fs::write(&path, docs::render_task_doc(t, &s, &cfg.detail))?;
+            println!("{} [{}] wrote {path}", k.emoji, k.name);
+            Ok(())
+        }
+    }
 }
 
 fn config_cmd(action: ConfigAction) -> Result<(), KittenError> {
@@ -893,6 +943,26 @@ mod hook {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // T45: the §I-completeness gate has two halves — `score::declared_cmds` +
+    // `score::interface_dim` (tested in score.rs) parse/compare, and this proves
+    // the clap-introspection half (`binary_cmds`) sees nested subcommands. At
+    // runtime `kittenscrew score` joins them against the real spec.
+    #[test]
+    fn binary_cmds_introspects_nested_subcommands() {
+        let cmds = binary_cmds();
+        for expected in [
+            "spec apply",
+            "plan next",
+            "plan graph",
+            "check done",
+            "check variance",
+            "config show",
+            "kitty says",
+        ] {
+            assert!(cmds.contains(expected), "binary_cmds missing `{expected}`");
+        }
+    }
 
     #[test]
     fn kitty_says_prefixes_output() {

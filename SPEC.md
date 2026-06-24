@@ -122,7 +122,7 @@ T19|.|write README.md section: install, hook wiring, `kittenscrew.toml` schema, 
 T20|∅|custom config format (YAML/JSON)|-|-   (ladder: TOML stdlib, no value in own format)
 T21|.|wrap `kittenscrew hook subagent-stop` → delegate squeez SubagentStop|T4|§C,V7
 T22|.|wrap `kittenscrew hook post-compact` → delegate squeez PostCompact + restore plan checkpoint|T4|§C,V7,V9
-T23|.|impl `kittenscrew docs task <id>` → write `docs/<id>-<slug>.md`, gated on `[docs] auto_generate`|T25|V12
+T23|x|impl `kittenscrew docs task <id>` → write `docs/<id>-<slug>.md`, gated on `[docs] auto_generate`|T25|V12
 T24|.|impl `[guard] blocked_cmds` in `hook pre-tool` → exit 2 if tool cmd matches blocklist|T15,T6|V11,§I
 T25|x|impl `.kittenscrew/spec.toml` store (toml crate) — tasks/deps/priority/scope/cites/invariants/bugs + opaque prose for §G/§C/§I|T1|§C,V9
 T26|∅|Rust NLP to parse agent prose intent into spec diff|-|-   (ladder: Rust DETECTS+classifies diff (T29); semantic intent = LLM, not Rust)
@@ -131,7 +131,7 @@ T28|x|topo-sort (Kahn) + `plan ready`/`next`/`blocking`/`resolve` over DAG; cycl
 T29|x|drift hook: diff SPEC.md vs projection → reconcile structured changes into store, escalate ambiguous prose|T27|V16
 T30|x|`check done`: scan task `scope` for fake-delivery markers + verify cited §V intact → demote failed `x`→`~`|T31|V18,V19
 T31|x|`scope` field per task (globs) → defines what `check done` scans; port fake-delivery scanner from agency|T25|V18
-T32|.|`kittenscrew plan graph` → ASCII DAG render (someday, optional, presentation-only; `ascii-dag` crate candidate). Consumes store, zero coupling — deferrable. priority=low|T28|§I,V13
+T32|x|`kittenscrew plan graph` → ASCII DAG render (someday, optional, presentation-only; `ascii-dag` crate candidate). Consumes store, zero coupling — deferrable. priority=low|T28|§I,V13
 T33|x|`kittenscrew spec import` → parse SPEC.md (old 4-col + new 5-col §T) → spec.toml; killed-note round-trip|T25|§C,V9
 T34|x|`kittenscrew plan path [<goal>]` → critical path (longest prereq chain) via DAG DP|-|§I,V13,V20
 T35|x|`kittenscrew plan impact <id>` → scope + newly-ready (unblocks) + transitive dependents (blocks)|-|§I,V13,V20
@@ -144,7 +144,7 @@ T41|x|`[plan]` config: forward_agg(max\|sum\|hybrid), discount γ, portfolio_wei
 T42|x|`value-variance` audit cmd + `[audit]` cadence (recheck_every_tasks/iters, variance_threshold, on_variance=report\|brainstorm\|halt)|T30,T39|V25
 T43|.|deliberation pipeline engine: primitives {brainstorm,research,evaluate,ask}, config-composed pipe, fixed-size bricks (default ~3 agents×5 turns, scale by composition), Rust referee/orchestrator + ANY-agent LLM roster (Claude/Pi/…, ⊥ CC-specific), ask=user-choice exit packet|T41,T42|V26,V27
 T44|.|`kittenscrew review` — assemble diff + ONLY relevant spec fragment + role prompt → call config'd remote agent(s) (OpenRouter via curl, 0-dep) → collect few-sentence notes/suggestions → feed deliberation (eval\|brainstorm\|ask). optional, advisory, absent-config=skip|T41|V26,V27,V29
-T45|.|interface-completeness gate: test §I declared cmds ⊆ binary clap subcommand tree (forge §I↔code drift lesson into deterministic floor)|-|V28
+T45|x|interface-completeness gate: test §I declared cmds ⊆ binary clap subcommand tree (forge §I↔code drift lesson into deterministic floor)|-|V28
 T46|x|persist toml-only fields (value/difficulty/risk/priority/scope/eval) across SPEC.md round-trip — decide: commit store \| render into SPEC.md \| sidecar. currently LOST on reimport (gitignored store + SPEC.md ⊥ carries them), silently|-|V9,V23
 T47|x|render-triggering cmds (spec apply, plan done, check done demote) detect SPEC.md drift vs store FIRST → abort + suggest `spec drift --apply` (prevent silent clobber of manual prose §G/§C/§I/§V edits). Discovered live: hand-edit §I then apply rendered stale store, dropped the edit|T29|V9,V16
 T48|x|`kittenscrew score` — GRADED conformance % (V31): dims §I-completeness, check-done pass-rate, dep-coverage, sync, invariant-test-coverage → 0-100 each + aggregate. deterministic. track convergence per commit, ⊥ binary|T45|V31

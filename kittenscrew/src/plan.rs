@@ -464,6 +464,49 @@ pub fn alternatives_with(s: &Store, p: &WorthParams) -> Vec<AltRoute> {
     out
 }
 
+/// T32 — ASCII DAG render: one `child → dep` edge per line (topo-ish by id),
+/// status-tagged, plus isolated nodes. Deterministic, presentation-only, zero
+/// deps (ponytail: a Mermaid/ascii-dag crate would be overkill for a text list).
+pub fn graph(s: &Store) -> String {
+    let sym = |id: &str| s.task(id).map(|t| t.status.symbol()).unwrap_or('?');
+    let mut lines = vec!["DAG (child → dep it waits on):".to_string()];
+    let mut edges: Vec<(String, String)> = s
+        .tasks
+        .iter()
+        .flat_map(|t| t.deps.iter().map(move |d| (t.id.clone(), d.clone())))
+        .collect();
+    edges.sort_by(|a, b| {
+        id_num(&a.0)
+            .cmp(&id_num(&b.0))
+            .then(id_num(&a.1).cmp(&id_num(&b.1)))
+    });
+    for (child, dep) in &edges {
+        lines.push(format!("  {} {} → {} {}", sym(child), child, dep, sym(dep)));
+    }
+    let connected: HashSet<&str> = edges
+        .iter()
+        .flat_map(|(c, d)| [c.as_str(), d.as_str()])
+        .collect();
+    let mut isolated: Vec<&str> = s
+        .tasks
+        .iter()
+        .map(|t| t.id.as_str())
+        .filter(|id| !connected.contains(id))
+        .collect();
+    isolated.sort_by_key(|i| id_num(i));
+    if !isolated.is_empty() {
+        lines.push(format!(
+            "isolated: {}",
+            isolated
+                .iter()
+                .map(|id| format!("{}{}", sym(id), id))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ));
+    }
+    lines.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

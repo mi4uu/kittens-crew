@@ -490,7 +490,7 @@ risk = 0
 
 [[task]]
 id = "T23"
-status = "todo"
+status = "done"
 task = "impl `kittenscrew docs task <id>` → write `docs/<id>-<slug>.md`, gated on `[docs] auto_generate`"
 deps = ["T25"]
 priority = 0
@@ -624,7 +624,7 @@ risk = 0
 
 [[task]]
 id = "T32"
-status = "todo"
+status = "done"
 task = "`kittenscrew plan graph` → ASCII DAG render (someday, optional, presentation-only; `ascii-dag` crate candidate). Consumes store, zero coupling — deferrable. priority=low"
 deps = ["T28"]
 priority = 0
@@ -835,7 +835,7 @@ risk = 3
 
 [[task]]
 id = "T45"
-status = "todo"
+status = "done"
 task = "interface-completeness gate: test §I declared cmds ⊆ binary clap subcommand tree (forge §I↔code drift lesson into deterministic floor)"
 deps = []
 priority = 0
