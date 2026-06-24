@@ -112,13 +112,10 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             let k = kitty::lookup("planning").expect("planning kitty");
             if !violations.is_empty() {
                 for v in &violations {
-                    eprintln!("{} [{}] {}", k.emoji, k.name, v);
+                    eprintln!("{}", kitty::say(k, v));
                 }
                 // Return the rejected diff to the caller (LLM) to fix + resubmit.
-                eprintln!(
-                    "{} [{}] diff rejected — SPEC.md unchanged:",
-                    k.emoji, k.name
-                );
+                eprintln!("{}", kitty::say(k, "diff rejected — SPEC.md unchanged:"));
                 println!("{trimmed}");
                 return Err(KittenError::Validation(format!(
                     "{} §V violation(s) — not written",
@@ -128,11 +125,15 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             s.save(store_path)?;
             std::fs::write(SPEC_PATH, spec::render(&s))?;
             println!(
-                "{} [{}] applied {} diff(s) → SPEC.md ({} tasks)",
-                k.emoji,
-                k.name,
-                diffs.len(),
-                s.tasks.len()
+                "{}",
+                kitty::say(
+                    k,
+                    &format!(
+                        "applied {} diff(s) → SPEC.md ({} tasks)",
+                        diffs.len(),
+                        s.tasks.len()
+                    )
+                )
             );
             Ok(())
         }
@@ -142,15 +143,16 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             let k = kitty::lookup("entropy").expect("entropy kitty");
             if violations.is_empty() {
                 println!(
-                    "{} [{}] spec clean — {} tasks, no violations",
-                    k.emoji,
-                    k.name,
-                    s.tasks.len()
+                    "{}",
+                    kitty::say(
+                        k,
+                        &format!("spec clean — {} tasks, no violations", s.tasks.len())
+                    )
                 );
                 Ok(())
             } else {
                 for v in &violations {
-                    println!("{} [{}] {}", k.emoji, k.name, v);
+                    println!("{}", kitty::say(k, v));
                 }
                 Err(KittenError::Validation(format!(
                     "{} violation(s)",
@@ -175,13 +177,17 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             s.save(store_path)?;
             let k = kitty::lookup("planning").expect("planning kitty");
             println!(
-                "{} [{}] imported → {} ({} tasks, {} invariants, {} bugs)",
-                k.emoji,
-                k.name,
-                store::STORE_PATH,
-                s.tasks.len(),
-                s.invariants.len(),
-                s.bugs.len()
+                "{}",
+                kitty::say(
+                    k,
+                    &format!(
+                        "imported → {} ({} tasks, {} invariants, {} bugs)",
+                        store::STORE_PATH,
+                        s.tasks.len(),
+                        s.invariants.len(),
+                        s.bugs.len()
+                    )
+                )
             );
             Ok(())
         }
@@ -189,7 +195,10 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             let s = store::Store::load(Path::new(store::STORE_PATH))?;
             std::fs::write(SPEC_PATH, spec::render(&s))?;
             let k = kitty::lookup("planning").expect("planning kitty");
-            println!("{} [{}] rendered {} from store", k.emoji, k.name, SPEC_PATH);
+            println!(
+                "{}",
+                kitty::say(k, &format!("rendered {SPEC_PATH} from store"))
+            );
             Ok(())
         }
         SpecAction::Drift { apply } => {
@@ -200,23 +209,27 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             let k = kitty::lookup("entropy").expect("entropy kitty");
 
             if d.is_empty() {
-                println!("{} [{}] no drift — SPEC.md ≡ store", k.emoji, k.name);
+                println!("{}", kitty::say(k, "no drift — SPEC.md ≡ store"));
                 return Ok(());
             }
             // Structured summary (V16): structural auto-reconcilable, prose escalates.
             println!("{}", serde_json::to_string_pretty(&d).unwrap());
             if !d.prose_changed.is_empty() {
                 println!(
-                    "{} [{}] prose drift in {} → review (adopted from SPEC.md, not silent)",
-                    k.emoji,
-                    k.name,
-                    d.prose_changed.join(",")
+                    "{}",
+                    kitty::say(
+                        k,
+                        &format!(
+                            "prose drift in {} → review (adopted from SPEC.md, not silent)",
+                            d.prose_changed.join(",")
+                        )
+                    )
                 );
             }
             if !apply {
                 println!(
-                    "{} [{}] dry-run — rerun w/ --apply to reconcile",
-                    k.emoji, k.name
+                    "{}",
+                    kitty::say(k, "dry-run — rerun w/ --apply to reconcile")
                 );
                 return Ok(());
             }
@@ -224,7 +237,7 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             let violations = spec::validate(&merged);
             if !violations.is_empty() {
                 for v in &violations {
-                    eprintln!("{} [{}] {}", k.emoji, k.name, v);
+                    eprintln!("{}", kitty::say(k, v));
                 }
                 return Err(KittenError::Validation(format!(
                     "{} §V violation(s) — store unchanged",
@@ -234,10 +247,14 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             merged.save(store_path)?;
             std::fs::write(SPEC_PATH, spec::render(&merged))?;
             println!(
-                "{} [{}] reconciled → store + SPEC.md re-rendered ({} task change(s))",
-                k.emoji,
-                k.name,
-                d.task_added.len() + d.task_removed.len() + d.task_changed.len()
+                "{}",
+                kitty::say(
+                    k,
+                    &format!(
+                        "reconciled → store + SPEC.md re-rendered ({} task change(s))",
+                        d.task_added.len() + d.task_removed.len() + d.task_changed.len()
+                    )
+                )
             );
             Ok(())
         }
@@ -332,7 +349,10 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
             s.save(store_path)?;
             std::fs::write(SPEC_PATH, spec::render(&s))?;
             let k = kitty::lookup("builder").expect("builder kitty");
-            println!("{} [{}] {id} → done; SPEC.md re-rendered", k.emoji, k.name);
+            println!(
+                "{}",
+                kitty::say(k, &format!("{id} → done; SPEC.md re-rendered"))
+            );
             Ok(())
         }
     }
@@ -354,20 +374,28 @@ fn check_cmd(action: CheckAction) -> Result<(), KittenError> {
                 .collect();
             if flagged.is_empty() {
                 println!(
-                    "{} [{}] value-variance ok — {} eval'd task(s) within ±{}",
-                    k.emoji,
-                    k.name,
-                    rows.len(),
-                    cfg.variance_threshold
+                    "{}",
+                    kitty::say(
+                        k,
+                        &format!(
+                            "value-variance ok — {} eval'd task(s) within ±{}",
+                            rows.len(),
+                            cfg.variance_threshold
+                        )
+                    )
                 );
                 return Ok(());
             }
             println!(
-                "{} [{}] variance flagged: {} → on_variance={}",
-                k.emoji,
-                k.name,
-                flagged.join(","),
-                cfg.on_variance
+                "{}",
+                kitty::say(
+                    k,
+                    &format!(
+                        "variance flagged: {} → on_variance={}",
+                        flagged.join(","),
+                        cfg.on_variance
+                    )
+                )
             );
             // V25/V27: halt is a hard stop; brainstorm/report just surface it.
             if cfg.on_variance == "halt" {
@@ -389,19 +417,24 @@ fn check_cmd(action: CheckAction) -> Result<(), KittenError> {
             let failed: Vec<&check::TaskReport> = reports.iter().filter(|r| !r.ok).collect();
             for r in &reports {
                 if r.ok {
-                    println!("{} [{}] {} ok", k.emoji, k.name, r.id);
+                    println!("{}", kitty::say(k, &format!("{} ok", r.id)));
                 } else {
+                    let cites: String = if r.broken_cites.is_empty() {
+                        "-".into()
+                    } else {
+                        r.broken_cites.join(",")
+                    };
                     println!(
-                        "{} [{}] {} FAIL → demote x→~ ({} marker(s), broken cites: {})",
-                        k.emoji,
-                        k.name,
-                        r.id,
-                        r.markers.len(),
-                        if r.broken_cites.is_empty() {
-                            "-".into()
-                        } else {
-                            r.broken_cites.join(",")
-                        }
+                        "{}",
+                        kitty::say(
+                            k,
+                            &format!(
+                                "{} FAIL → demote x→~ ({} marker(s), broken cites: {})",
+                                r.id,
+                                r.markers.len(),
+                                cites
+                            )
+                        )
                     );
                     for m in &r.markers {
                         println!("    {}:{} [{}] {}", m.file, m.line, m.kind, m.text);
@@ -411,10 +444,14 @@ fn check_cmd(action: CheckAction) -> Result<(), KittenError> {
 
             if failed.is_empty() {
                 println!(
-                    "{} [{}] all {} done task(s) verified — no fake delivery",
-                    k.emoji,
-                    k.name,
-                    reports.len()
+                    "{}",
+                    kitty::say(
+                        k,
+                        &format!(
+                            "all {} done task(s) verified — no fake delivery",
+                            reports.len()
+                        )
+                    )
                 );
                 return Ok(());
             }
@@ -475,8 +512,11 @@ fn docs_cmd(action: DocsAction) -> Result<(), KittenError> {
             // [docs] auto_generate gate keeps it silent by default.
             if !cfg.auto_generate {
                 eprintln!(
-                    "{} [{}] docs off ([docs] auto_generate=false) — skipped {id}",
-                    k.emoji, k.name
+                    "{}",
+                    kitty::say(
+                        k,
+                        &format!("docs off ([docs] auto_generate=false) — skipped {id}")
+                    )
                 );
                 return Ok(());
             }
@@ -487,7 +527,7 @@ fn docs_cmd(action: DocsAction) -> Result<(), KittenError> {
             let path = docs::doc_path(t);
             std::fs::create_dir_all("docs")?;
             std::fs::write(&path, docs::render_task_doc(t, &s, &cfg.detail))?;
-            println!("{} [{}] wrote {path}", k.emoji, k.name);
+            println!("{}", kitty::say(k, &format!("wrote {path}")));
             Ok(())
         }
     }
@@ -551,13 +591,17 @@ fn init_cmd(
         (false, false) => "kept",
     };
     println!(
-        "{} [{}] {tag}{cfg} {} · {} membrane event(s) registered, {} already wired → {}",
-        k.emoji,
-        k.name,
-        report.config_path.display(),
-        report.registered.len(),
-        report.already.len(),
-        report.settings_path.display(),
+        "{}",
+        kitty::say(
+            k,
+            &format!(
+                "{tag}{cfg} {} · {} membrane event(s) registered, {} already wired → {}",
+                report.config_path.display(),
+                report.registered.len(),
+                report.already.len(),
+                report.settings_path.display(),
+            )
+        )
     );
     Ok(())
 }
