@@ -100,38 +100,38 @@ V31: conformance = GRADED %, ⊥ binary pass/fail. score dims (§I-completeness,
 
 id|status|task|deps|cites
 T1|x|scaffold `kittenscrew/` cargo crate w/ clap CLI|-|§I
-T2|x|impl `kittenscrew --version` & `kittenscrew kitty list` (static data)|-|§I
-T3|x|impl `kittenscrew kitty says` (parse kitty id → emoji + name → prefix output)|-|V5
-T4|x|write hook shims (`session-start.sh`, `pretooluse.sh`, `posttooluse.sh`, `precompact.sh`) → delegate to `kittenscrew hook <event>`|-|V7
-T5|x|impl `kittenscrew hook session-start` → `squeez init` + verify install + emit `kitty says "system ready"`|-|V2,V6
-T6|x|impl `kittenscrew hook pre-tool` → kittenscrew checks first (blocked cmds) → delegate to `squeez` pretooluse.sh|-|V7
-T7|x|impl `kittenscrew hook post-tool` → delegate to `squeez` posttooluse.sh|-|V7
-T8|x|impl `kittenscrew hook pre-compact` → `squeez` precompact.sh + checkpoint plan to `.kittenscrew/plan.json`|-|V7
-T9|x|impl `kittenscrew spec read` → render section/whole from store|-|§I
-T10|x|impl `kittenscrew spec apply` → accept diff, validate vs §V rules, write SPEC.md or exit 2|-|V3
-T11|x|impl `kittenscrew spec check` → structural: deps/cites resolve, ids unique, cycle DFS|-|§I,V14
+T2|x|impl `kittenscrew --version` & `kittenscrew kitty list` (static data)|T1|§I
+T3|x|impl `kittenscrew kitty says` (parse kitty id → emoji + name → prefix output)|T1|V5
+T4|x|write hook shims (`session-start.sh`, `pretooluse.sh`, `posttooluse.sh`, `precompact.sh`) → delegate to `kittenscrew hook <event>`|T1|V7
+T5|x|impl `kittenscrew hook session-start` → `squeez init` + verify install + emit `kitty says "system ready"`|T4|V2,V6
+T6|x|impl `kittenscrew hook pre-tool` → kittenscrew checks first (blocked cmds) → delegate to `squeez` pretooluse.sh|T4|V7
+T7|x|impl `kittenscrew hook post-tool` → delegate to `squeez` posttooluse.sh|T4|V7
+T8|x|impl `kittenscrew hook pre-compact` → `squeez` precompact.sh + checkpoint plan to `.kittenscrew/plan.json`|T4|V7
+T9|x|impl `kittenscrew spec read` → render section/whole from store|T25|§I
+T10|x|impl `kittenscrew spec apply` → accept diff, validate vs §V rules, write SPEC.md or exit 2|T25,T27|V3
+T11|x|impl `kittenscrew spec check` → structural: deps/cites resolve, ids unique, cycle DFS|T25|§I,V14
 T12|∅|impl `kittenscrew plan resolve` → parse §T table, build DAG, topo-sort|-|§I,V4   (superseded by T28 (plan resolve/topo-sort)
 T13|∅|impl `kittenscrew plan next` → filter `.` tasks w/ all deps `x`, return lowest id|-|§I   (superseded by T28 (plan next)
 T14|∅|impl `kittenscrew plan done <id>` → flip `.`→`x` in §T row, validate id exists|-|§I   (superseded by plan done cmd)
-T15|x|impl `kittenscrew.toml` parser + defaults (compression_level, hooks list, docs.auto_generate)|-|§I
-T16|.|impl `kittenscrew init` → write `kittenscrew.toml` template + register hooks in `~/.claude/settings.json`|-|V6
-T17|x|add `kittenscrew` to PATH in `claudeoneprovider.sh` & `claudeopenrouter.sh`|-|§C
-T18|.|write `kittenscrew/tests/` integration tests (1 per §I command, assert exit codes per V1)|-|V1
-T19|.|write README.md section: install, hook wiring, `kittenscrew.toml` schema, command reference|-|§I
+T15|x|impl `kittenscrew.toml` parser + defaults (compression_level, hooks list, docs.auto_generate)|T1|§I
+T16|.|impl `kittenscrew init` → write `kittenscrew.toml` template + register hooks in `~/.claude/settings.json`|T15|V6
+T17|x|add `kittenscrew` to PATH in `claudeoneprovider.sh` & `claudeopenrouter.sh`|T1|§C
+T18|.|write `kittenscrew/tests/` integration tests (1 per §I command, assert exit codes per V1)|T28|V1
+T19|.|write README.md section: install, hook wiring, `kittenscrew.toml` schema, command reference|T16|§I
 T20|∅|custom config format (YAML/JSON)|-|-   (ladder: TOML stdlib, no value in own format)
-T21|.|wrap `kittenscrew hook subagent-stop` → delegate squeez SubagentStop|-|§C,V7
-T22|.|wrap `kittenscrew hook post-compact` → delegate squeez PostCompact + restore plan checkpoint|-|§C,V7,V9
-T23|.|impl `kittenscrew docs task <id>` → write `docs/<id>-<slug>.md`, gated on `[docs] auto_generate`|-|V12
-T24|.|impl `[guard] blocked_cmds` in `hook pre-tool` → exit 2 if tool cmd matches blocklist|-|V11,§I
-T25|x|impl `.kittenscrew/spec.toml` store (toml crate) — tasks/deps/priority/scope/cites/invariants/bugs + opaque prose for §G/§C/§I|-|§C,V9
+T21|.|wrap `kittenscrew hook subagent-stop` → delegate squeez SubagentStop|T4|§C,V7
+T22|.|wrap `kittenscrew hook post-compact` → delegate squeez PostCompact + restore plan checkpoint|T4|§C,V7,V9
+T23|.|impl `kittenscrew docs task <id>` → write `docs/<id>-<slug>.md`, gated on `[docs] auto_generate`|T25|V12
+T24|.|impl `[guard] blocked_cmds` in `hook pre-tool` → exit 2 if tool cmd matches blocklist|T15,T6|V11,§I
+T25|x|impl `.kittenscrew/spec.toml` store (toml crate) — tasks/deps/priority/scope/cites/invariants/bugs + opaque prose for §G/§C/§I|T1|§C,V9
 T26|∅|Rust NLP to parse agent prose intent into spec diff|-|-   (ladder: Rust DETECTS+classifies diff (T29); semantic intent = LLM, not Rust)
-T27|x|render SPEC.md from spec.toml (caveman pipe-table, FORMAT.md) on every mutating cmd|-|V9
-T28|x|topo-sort (Kahn) + `plan ready`/`next`/`blocking`/`resolve` over DAG; cycle detect|-|V13,V14,V15,V17
-T29|x|drift hook: diff SPEC.md vs projection → reconcile structured changes into store, escalate ambiguous prose|-|V16
-T30|x|`check done`: scan task `scope` for fake-delivery markers + verify cited §V intact → demote failed `x`→`~`|-|V18,V19
-T31|x|`scope` field per task (globs) → defines what `check done` scans; port fake-delivery scanner from agency|-|V18
-T32|.|`kittenscrew plan graph` → ASCII DAG render (someday, optional, presentation-only; `ascii-dag` crate candidate). Consumes store, zero coupling — deferrable. priority=low|-|§I,V13
-T33|x|`kittenscrew spec import` → parse SPEC.md (old 4-col + new 5-col §T) → spec.toml; killed-note round-trip|-|§C,V9
+T27|x|render SPEC.md from spec.toml (caveman pipe-table, FORMAT.md) on every mutating cmd|T25|V9
+T28|x|topo-sort (Kahn) + `plan ready`/`next`/`blocking`/`resolve` over DAG; cycle detect|T25|V13,V14,V15,V17
+T29|x|drift hook: diff SPEC.md vs projection → reconcile structured changes into store, escalate ambiguous prose|T27|V16
+T30|x|`check done`: scan task `scope` for fake-delivery markers + verify cited §V intact → demote failed `x`→`~`|T31|V18,V19
+T31|x|`scope` field per task (globs) → defines what `check done` scans; port fake-delivery scanner from agency|T25|V18
+T32|.|`kittenscrew plan graph` → ASCII DAG render (someday, optional, presentation-only; `ascii-dag` crate candidate). Consumes store, zero coupling — deferrable. priority=low|T28|§I,V13
+T33|x|`kittenscrew spec import` → parse SPEC.md (old 4-col + new 5-col §T) → spec.toml; killed-note round-trip|T25|§C,V9
 T34|x|`kittenscrew plan path [<goal>]` → critical path (longest prereq chain) via DAG DP|-|§I,V13,V20
 T35|x|`kittenscrew plan impact <id>` → scope + newly-ready (unblocks) + transitive dependents (blocks)|-|§I,V13,V20
 T36|x|`kittenscrew plan alternatives` → frontier choices each w/ {scope, unblocks, blocks}, ranked by leverage|-|§I,V20
