@@ -840,6 +840,42 @@ mod kitty {
     pub fn lookup(id: &str) -> Option<&'static Kitty> {
         ALL.iter().find(|k| k.id == id)
     }
+
+    /// T55: deterministic task → kitty role. Which hat fits this task's work?
+    /// Ordered: docs → entropy(check/review) → memory(bug) → planning(spec) →
+    /// builder (the default — implementation). Lets the hooks tell the agent which
+    /// role to adopt for the current task (orchestration, not voice decoration).
+    pub fn for_task(task: &str) -> &'static Kitty {
+        let t = task.to_ascii_lowercase();
+        let any = |kws: &[&str]| kws.iter().any(|k| t.contains(k));
+        let id = if any(&["readme", "doc", "comment", "changelog"]) {
+            "scribe"
+        } else if any(&[
+            "check",
+            "drift",
+            "review",
+            "scan",
+            "variance",
+            "audit",
+            "bloat",
+            "dead code",
+        ]) {
+            "entropy"
+        } else if any(&["bug", "regression", "backprop"]) {
+            "memory"
+        } else if any(&["spec", "plan", "invariant", "§", "topo", "dag"]) {
+            "planning"
+        } else {
+            "builder"
+        };
+        lookup(id).unwrap_or(&ALL[0])
+    }
+
+    /// One-line role hint for context injection: `🔨 [Builder Kitty] build + ladder`.
+    pub fn role_hint(task: &str) -> String {
+        let k = for_task(task);
+        format!("{} [{}] {}", k.emoji, k.name, k.role)
+    }
 }
 
 /// squeez binary + hook scripts detection + invocation. V2: graceful degrade.
@@ -1010,11 +1046,20 @@ mod hook {
             _ => None,
         };
 
-        let ctx = intake::render(
+        let mut ctx = intake::render(
             intent,
             next.as_ref().map(|(i, t)| (i.as_str(), t.as_str())),
             referenced.as_ref(),
         );
+        // T55: tell the agent which hat to wear for the work it's about to do.
+        if let Some((_, task)) = referenced
+            .as_ref()
+            .map(|t| (t.id.as_str(), t.task.as_str()))
+        {
+            ctx.push_str(&format!("suggested role: {}\n", kitty::role_hint(task)));
+        } else if let Some((_, task)) = next.as_ref() {
+            ctx.push_str(&format!("suggested role: {}\n", kitty::role_hint(task)));
+        }
         // Claude Code UserPromptSubmit contract: additionalContext is injected
         // before the turn. Emit as a JSON string (serde escapes newlines).
         let payload = serde_json::json!({
@@ -1114,6 +1159,13 @@ mod hook {
                     iters: state.iters + 1,
                 }
                 .save();
+                // T55: graft the suggested role onto the drive-on instruction.
+                let context = match next.as_ref() {
+                    Some((_, task)) => {
+                        format!("{context}\nsuggested role: {}", kitty::role_hint(task))
+                    }
+                    None => context,
+                };
                 // Stop-hook contract: block the stop, feed `reason` as next input.
                 let payload = serde_json::json!({ "decision": "block", "reason": context });
                 println!("{payload}");
@@ -1150,15 +1202,56 @@ mod hook {
         Ok(())
     }
 
-    /// T7: PostToolUse — delegate to squeez, then optional kittenscrew post-processing.
+    /// T7+T54: PostToolUse — apply the compression POLICY (V32), then delegate the
+    /// WORK to squeez (V10). kittenscrew classifies the tool's output and, when the
+    /// policy puts that content-class on the lossless floor (`off` — JSON, errors,
+    /// diffs), it SKIPS squeez's output rewrite so structured/actionable output is
+    /// never mangled (the exact failure mode V32 exists to prevent), while still
+    /// running squeez's telemetry. For prose/dumps it runs the full squeez hook.
     fn post_tool(stdin: &str) -> Result<(), KittenError> {
+        let cfg = config::load().unwrap_or_default().compression;
+        let (tool, content) = tool_result(stdin);
+        let class = compression::classify_content(&content);
+        let level = compression::level_for(&cfg, class);
+
+        if level == "off" {
+            // Lossless floor: keep the output verbatim, telemetry only (⊥ rewrite).
+            if let Some(t) = tool {
+                let _ = squeez::run(&["track-result", &t], stdin);
+            }
+            return Ok(());
+        }
+
+        // Compressible class: full squeez post-tool hook (track + compress + track).
         if let Some(out) = squeez::run_hook("post-tool", stdin)? {
             if !out.trim().is_empty() {
                 print!("{out}");
             }
         }
-        // TODO T9-T11: if SPEC.md modified → run spec check
         Ok(())
+    }
+
+    /// Extract `(tool_name, output_content)` from a PostToolUse hook payload. Best
+    /// effort — a shape we don't recognize yields `(None, "")` → classified as
+    /// prose (compressible), the safe-for-telemetry default.
+    fn tool_result(stdin: &str) -> (Option<String>, String) {
+        let v: serde_json::Value = match serde_json::from_str(stdin) {
+            Ok(v) => v,
+            Err(_) => return (None, String::new()),
+        };
+        let tool = v
+            .get("tool_name")
+            .and_then(|t| t.as_str())
+            .map(str::to_owned);
+        let content = match v.get("tool_result").or_else(|| v.get("tool_response")) {
+            Some(serde_json::Value::String(s)) => s.clone(),
+            Some(serde_json::Value::Object(o)) => {
+                o.get("content").map(|c| c.to_string()).unwrap_or_default()
+            }
+            Some(other) => other.to_string(),
+            None => String::new(),
+        };
+        (tool, content)
     }
 
     /// T8: PreCompact — delegate to squeez + snapshot plan.
@@ -1195,6 +1288,18 @@ mod hook {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // T55: deterministic task → kitty role assignment for context injection.
+    #[test]
+    fn for_task_maps_work_to_the_right_kitty() {
+        assert_eq!(kitty::for_task("impl the parser").id, "builder");
+        assert_eq!(kitty::for_task("write README section").id, "scribe");
+        assert_eq!(kitty::for_task("check done on touched scope").id, "entropy");
+        assert_eq!(kitty::for_task("fix the regression bug").id, "memory");
+        assert_eq!(kitty::for_task("topo-sort the spec DAG").id, "planning");
+        // role_hint is emoji + name + role.
+        assert!(kitty::role_hint("impl X").contains("Builder Kitty"));
+    }
 
     // T45: the §I-completeness gate has two halves — `score::declared_cmds` +
     // `score::interface_dim` (tested in score.rs) parse/compare, and this proves
