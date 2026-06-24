@@ -53,7 +53,7 @@ interfaces = [
     "cmd: `kittenscrew plan impact <id>` → JSON {scope, unblocks[], blocks[]}",
     "cmd: `kittenscrew plan path [<goal>]` → JSON {path[], length} critical/longest prereq chain",
     "cmd: `kittenscrew plan alternatives` → JSON [{id, task, scope, unblocks, blocks}] frontier choices",
-    "cmd: `kittenscrew hook <event>` → runs hook logic for SessionStart|PreToolUse|PostToolUse|PreCompact",
+    "cmd: `kittenscrew hook <event>` → runs hook logic for SessionStart|UserPromptSubmit|PreToolUse|PostToolUse|PreCompact; `user-prompt` classifies the prompt (maps-§T|clear|ambiguous) + injects targeted context (plan next + referenced task) as `additionalContext` (V33,V35)",
     "cmd: `kittenscrew score` → JSON graded conformance: {overall, dims:[{name, pct, detail}]} (interface-completeness, check-done-pass, dep-coverage, value-coverage, sync) — convergence metric, ⊥ binary",
     "cmd: `kittenscrew config show` → resolved `kittenscrew.toml` (defaults if absent) → JSON",
     "cmd: `kittenscrew init` → writes `kittenscrew.toml` template, registers hooks in `~/.claude/settings.json`",
@@ -960,7 +960,7 @@ risk = 3
 
 [[task]]
 id = "T51"
-status = "todo"
+status = "done"
 task = "`UserPromptSubmit` hook → `kittenscrew hook user-prompt`: classify command {clear|ambiguous|maps-§T}, inject ONLY targeted context (spec read relevant + plan next), ⊥ front-load. ambiguous → agent clarifies before acting"
 deps = ["T16"]
 priority = 0

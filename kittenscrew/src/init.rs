@@ -23,6 +23,7 @@ pub const MEMBRANE: &[(&str, &str, &str)] = &[
         "session-start",
         "startup|resume|clear|compact",
     ),
+    ("UserPromptSubmit", "user-prompt", ""),
     ("PreToolUse", "pre-tool", ""),
     ("PostToolUse", "post-tool", ""),
     ("PreCompact", "pre-compact", ""),

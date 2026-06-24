@@ -13,6 +13,7 @@ mod config;
 mod docs;
 mod drift;
 mod init;
+mod intake;
 mod plan;
 mod score;
 mod spec;
@@ -942,6 +943,7 @@ mod hook {
         std::io::stdin().read_to_string(&mut stdin)?;
         match event {
             "session-start" => session_start(&stdin),
+            "user-prompt" => user_prompt(&stdin),
             "pre-tool" => pre_tool(&stdin),
             "post-tool" => post_tool(&stdin),
             "pre-compact" => pre_compact(&stdin),
@@ -949,6 +951,47 @@ mod hook {
                 "unknown hook event: {other}"
             ))),
         }
+    }
+
+    /// T51: UserPromptSubmit intake (V35, V33). Classify the prompt, inject ONLY
+    /// targeted context (`plan next` + a referenced task's record) as
+    /// `additionalContext`. Deterministic; the LLM resolves any flagged ambiguity.
+    /// Graceful: a malformed/empty payload still emits valid (if sparse) context.
+    fn user_prompt(stdin: &str) -> Result<(), KittenError> {
+        let prompt = serde_json::from_str::<serde_json::Value>(stdin)
+            .ok()
+            .and_then(|v| v.get("prompt").and_then(|p| p.as_str()).map(str::to_owned))
+            .unwrap_or_default();
+
+        let intent = intake::classify(&prompt);
+
+        // Resolve next + the referenced task from the store (best-effort: a
+        // missing/unreadable store just yields an empty frontier, never a crash).
+        let store = store::Store::load(std::path::Path::new(store::STORE_PATH)).ok();
+        let wp = worth_params();
+        let next = store
+            .as_ref()
+            .and_then(|s| plan::next_with(s, &wp).map(|t| (t.id.clone(), t.task.clone())));
+        let referenced = match (intake::task_ref(&prompt), store.as_ref()) {
+            (Some(id), Some(s)) => s.tasks.iter().find(|t| t.id == id).cloned(),
+            _ => None,
+        };
+
+        let ctx = intake::render(
+            intent,
+            next.as_ref().map(|(i, t)| (i.as_str(), t.as_str())),
+            referenced.as_ref(),
+        );
+        // Claude Code UserPromptSubmit contract: additionalContext is injected
+        // before the turn. Emit as a JSON string (serde escapes newlines).
+        let payload = serde_json::json!({
+            "hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "additionalContext": ctx,
+            }
+        });
+        println!("{payload}");
+        Ok(())
     }
 
     /// T5: SessionStart — verify install, call `squeez init`, log ready.
