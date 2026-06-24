@@ -1,0 +1,182 @@
+//! clap CLI surface — the command tree (`Cli`, `Cmd`, and the `*Action` enums).
+
+use clap::{Parser, Subcommand};
+
+/// Kittenscrew CLI — wraps squeez + manages spec/plan for the kitten plugin.
+#[derive(Parser, Debug)]
+#[command(name = "kittenscrew", version, about)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub cmd: Cmd,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Cmd {
+    /// Kitty visual wrapper — prefix output w/ emoji + name.
+    Kitty {
+        #[command(subcommand)]
+        action: KittyAction,
+    },
+    /// Spec management (T9-T11).
+    Spec {
+        #[command(subcommand)]
+        action: SpecAction,
+    },
+    /// Plan management (T12-T14).
+    Plan {
+        #[command(subcommand)]
+        action: PlanAction,
+    },
+    /// Cyclic done-eval (T30): fake-delivery scan + cited-§V integrity, demote on fail.
+    Check {
+        #[command(subcommand)]
+        action: CheckAction,
+    },
+    /// Graded conformance score (T48, V31): how close to ideal, 0-100% per dim.
+    Score,
+    /// Hook orchestration (T5-T8). Reads JSON from stdin (Claude Code hook contract).
+    Hook {
+        /// Hook event: session-start | pre-tool | post-tool | pre-compact.
+        event: String,
+    },
+    /// Per-project config (T15): `kittenscrew.toml` parse + defaults.
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
+    /// Compression policy (T49, V32): per content-class squeez level.
+    Compression {
+        #[command(subcommand)]
+        action: CompressionAction,
+    },
+    /// Per-task docs (T23): `docs task <id>` → `docs/<id>-<slug>.md` (V12, opt-in).
+    Docs {
+        #[command(subcommand)]
+        action: DocsAction,
+    },
+    /// Init: write kittenscrew.toml + register the hook membrane (T16).
+    Init {
+        /// Dir holding `settings.json` (default: `$HOME/.claude`). Isolates the
+        /// write — pass a scratch dir for tests / Docker arms.
+        #[arg(long)]
+        target: Option<std::path::PathBuf>,
+        /// Report the plan without touching disk.
+        #[arg(long)]
+        dry_run: bool,
+        /// Overwrite an existing `kittenscrew.toml` (default: keep it).
+        #[arg(long)]
+        force: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ConfigAction {
+    /// Resolve `kittenscrew.toml` (defaults if absent) → JSON.
+    Show,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CompressionAction {
+    /// Print the full class→level policy as JSON.
+    Policy,
+    /// Print the squeez level for one content-class (exit 2 if unknown).
+    Level {
+        /// Content-class: prose | dump | structured | diff.
+        class: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DocsAction {
+    /// Write `docs/<id>-<slug>.md` for a task (only if `[docs] auto_generate`).
+    Task {
+        /// Task id (e.g. T9).
+        id: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum KittyAction {
+    /// Speak as a kitty — prefixes output w/ `😽📐 [Planning Kitty] msg`.
+    Says {
+        /// Kitty id (planning|builder|entropy|memory|scribe|orchestrating|helper|explorer|style|grill).
+        kitty: String,
+        /// Message to prefix.
+        message: String,
+        /// Wrap in a comic speech-box: rounded (default) | heavy | double | classic.
+        #[arg(long = "box", num_args = 0..=1, default_missing_value = "rounded")]
+        frame: Option<String>,
+    },
+    /// List all kitties w/ emoji + role.
+    List,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SpecAction {
+    /// Read a section (§<S> letter, e.g. T) or whole spec, from the store.
+    Read {
+        /// Section letter (G|C|I|V|T|B). Optional → whole spec.
+        section: Option<String>,
+        /// Expand caveman symbols to English (legend baked in, no FORMAT.md needed).
+        #[arg(long)]
+        plain: bool,
+    },
+    /// Apply structured JSON diff(s) from stdin (validates vs §V; exit 2 + unchanged on violation).
+    Apply,
+    /// Structural validation: deps/cites resolve, ids unique, no cycle.
+    Check,
+    /// Bootstrap: parse SPEC.md → `.kittenscrew/spec.toml` (one-time / drift).
+    Import,
+    /// Regenerate SPEC.md from the store (projection).
+    Render,
+    /// Drift reconcile (T29): diff edited SPEC.md vs store; `--apply` reconciles structural + re-renders.
+    Drift {
+        /// Reconcile structural task changes into the store + re-render (else dry-run report).
+        #[arg(long)]
+        apply: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CheckAction {
+    /// Re-verify every `x` task; demote `x`→`~` on fake-delivery or broken cites.
+    Done,
+    /// value-variance (T42): delivered (eval) vs expected (value) per done task.
+    Variance,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PlanAction {
+    /// Topo-sort tasks by dependencies (JSON order).
+    Resolve,
+    /// READY frontier: all unblocked tasks (the parallelizable batch).
+    Ready,
+    /// Single next task (ready, lowest priority then id).
+    Next,
+    /// Tasks directly blocked by <id>.
+    Blocking {
+        /// Task id (e.g. T5).
+        id: String,
+    },
+    /// Impact of doing <id>: scope delivered, tasks unblocked + blocked.
+    Impact {
+        /// Task id (e.g. T5).
+        id: String,
+    },
+    /// Critical path (longest prereq chain), optionally ending at <goal>.
+    Path {
+        /// Goal task id. Optional → longest chain in the DAG.
+        goal: Option<String>,
+    },
+    /// Frontier choices, each with {scope, unblocks, blocks, worth, rank}, ranked by worth.
+    Alternatives,
+    /// All tasks scored by worth/rank (value-weighted, V22/V24), highest first.
+    Worth,
+    /// ASCII DAG render of tasks + deps (presentation-only, T32).
+    Graph,
+    /// Mark task done (store → re-render SPEC.md projection).
+    Done {
+        /// Task id (e.g. T5).
+        id: String,
+    },
+}
