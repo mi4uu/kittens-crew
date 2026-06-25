@@ -458,23 +458,36 @@ fn run_cmd(
                 "claude-code driver not built yet (T71, tmux backend) — use --driver api".into(),
             ))
         }
-        "api" => match model {
-            // A chosen model routes through the multi-provider rig backend (T61).
-            Some(m) => {
-                let d = RigDriver::from_env(
-                    Some("https://codestral.mistral.ai/v1"),
-                    m,
-                    "CODESTRAL_API_KEY",
-                )
-                .map_err(|e| KittenError::Validation(format!("driver: {e}")))?;
+        "api" => match std::env::var("KITTENSCREW_BASE_URL").ok() {
+            // Endpoint override (same as bench): target ANY OpenAI-compatible endpoint —
+            // LM Studio (:1234), ollama (:11434), openrouter — via the known-good
+            // HttpDriver (rig 0.39 500s on real endpoints). Model = --model or KITTENSCREW_MODEL.
+            Some(base) => {
+                let m = model
+                    .clone()
+                    .or_else(|| std::env::var("KITTENSCREW_MODEL").ok())
+                    .unwrap_or_else(|| "default".into());
+                let key = std::env::var("KITTENSCREW_API_KEY").unwrap_or_else(|_| "x".into());
+                let d = HttpDriver::openai(&base, m, key);
                 go(&d, &opts, parallel, k)
             }
-            // Default: the proven codestral HTTP driver.
-            None => {
-                let d = HttpDriver::codestral()
+            // No override: a chosen --model routes through rig (T61); else codestral.
+            None => match model {
+                Some(m) => {
+                    let d = RigDriver::from_env(
+                        Some("https://codestral.mistral.ai/v1"),
+                        m,
+                        "CODESTRAL_API_KEY",
+                    )
                     .map_err(|e| KittenError::Validation(format!("driver: {e}")))?;
-                go(&d, &opts, parallel, k)
-            }
+                    go(&d, &opts, parallel, k)
+                }
+                None => {
+                    let d = HttpDriver::codestral()
+                        .map_err(|e| KittenError::Validation(format!("driver: {e}")))?;
+                    go(&d, &opts, parallel, k)
+                }
+            },
         },
         other => {
             return Err(KittenError::Validation(format!(
