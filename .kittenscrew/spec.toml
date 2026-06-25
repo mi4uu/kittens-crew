@@ -1517,6 +1517,22 @@ value = 4
 difficulty = 3
 risk = 2
 
+[[task]]
+id = "T89"
+status = "todo"
+task = "Harness TUI — fzf-style event picker with preview (user visual 2026-06-25, systemd-boot-log look). Each orchestration turn/event = ONE clean line (NOT a log dump): a status icon ([ OK ] green / FAIL / running / warn), bold key text, rest truncated with ellipsis. The selected line gets a colored left-bar + bold. A split DETAIL pane on the right shows the full text of the selected/hovered line (wrapped). Bottom: a position/total counter (1964/1964) + a `>` live-search/filter input (fzf-style fuzzy). Goal: easy to SEARCH and NAVIGATE, details on hover/select, the main window stays clean. Feeds from T78 events (line item + severity->icon), T68 status liveness, drive progress, T76 OrchScore. report vs report&ask modes."
+deps = [
+    "T78",
+    "T68",
+]
+priority = 4
+cites = []
+scope = ["kittenscrew/src/tui.rs"]
+note = "User reference image: systemd boot log split-pane — left scrollable [ OK ]-tagged lines (one event each, bold keyword, `··` truncation, pink left-bar on selection), right detail pane, bottom `1964/1964` counter + `>` filter. = fzf --preview semantics. Likely ratatui. See memory tui-report-surfacing-fzf-preview."
+value = 4
+difficulty = 3
+risk = 2
+
 [[bug]]
 id = "B1"
 date = "2026-06-24"
