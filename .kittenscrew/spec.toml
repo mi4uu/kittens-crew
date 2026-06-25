@@ -1491,6 +1491,32 @@ value = 5
 difficulty = 2
 risk = 2
 
+[[task]]
+id = "T87"
+status = "todo"
+task = "Real shadow-git snapshot/rollback backend (user: do it SERIOUSLY) — T69 built only the IN-MEMORY checkpoint model with a placeholder `code_ref` string. This is the REAL thing the user wants: before an agent acts (writes files / runs commands) snapshot the actual working-tree state in git (git stash / a shadow commit on a scratch ref / a per-attempt worktree); if the agent misbehaves (bad karma T81, tripwire T64 hit, verify fail T63, deal-breaker) ROLL BACK so nothing bad happened. The safety net that makes YOLO mode safe. Replace T69 code_ref placeholder with real git plumbing, keyed by run_id for crash-resumable rollback."
+deps = ["T69"]
+priority = 2
+cites = []
+scope = ["kittenscrew/src/driver/checkpoint.rs"]
+note = "User 2026-06-25, emphatic (poważnie przemyśl). Pairs with T64 tripwire + the karma/intervention layer: snapshot before act, revert on mess. T69 in-memory log stays as the index; this adds the git backend."
+value = 5
+difficulty = 3
+risk = 3
+
+[[task]]
+id = "T88"
+status = "todo"
+task = "Model failover / reserve bench (user: zdychający model idzie na ławkę rezerwowych) — when a dispatch DOESNT RESPOND / the model is dead (timeout, dropped connection, empty reply) AND other models are available, BENCH the dead one and SWAP to a reserve from the pool (graceful degrade, never stall while options exist). This is the dead-model case, DISTINCT from garbage-but-responsive (rustc-fail) which warrants retry-with-error feedback, NOT a swap. Ties T73 model-pick (the pool + soft preferences pick the reserve) to the intervention ladder (T81) and the routing-server failover embryo. Distinguish the three failure modes: non-compiling output (retry) vs dead/silent (failover) vs HTTP error (handle)."
+deps = ["T73"]
+priority = 2
+cites = []
+scope = ["kittenscrew/src/driver/api.rs"]
+note = "User 2026-06-25. The dead-model swap is the failover half of T73 graceful-degrade made concrete. Three distinct dispatch outcomes need distinct handling — currently drive() treats all non-success as the same Halt."
+value = 4
+difficulty = 3
+risk = 2
+
 [[bug]]
 id = "B1"
 date = "2026-06-24"
