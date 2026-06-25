@@ -474,13 +474,34 @@ fn bench_cmd(
     max_iters: u32,
     max_retries: u32,
 ) -> Result<(), KittenError> {
-    use crate::driver::api::HttpDriver;
+    use crate::driver::api::{Driver, HttpDriver, RigDriver};
     use crate::driver::bench::{bench, BenchOpts};
 
-    let driver = HttpDriver::codestral()
-        .map_err(|e| KittenError::Validation(format!("driver: {e}")))?;
+    // Endpoint override: point the bench at ANY OpenAI-compatible endpoint via env —
+    // Codestral, OpenRouter direct, or a local ollama (http://localhost:11434/v1) —
+    // else the proven codestral HTTP driver. Lets us prove the loop on a real model
+    // without a Codestral key (e.g. a small local ollama coder).
+    //   KITTENSCREW_BASE_URL=http://localhost:11434/v1 KITTENSCREW_MODEL=qwen2.5-coder \
+    //   KITTENSCREW_API_KEY=ollama kittenscrew bench --store toy.toml --k 1
+    let driver: Box<dyn Driver> = match (
+        std::env::var("KITTENSCREW_BASE_URL").ok(),
+        std::env::var("KITTENSCREW_MODEL").ok(),
+    ) {
+        (Some(base), Some(model)) => {
+            let key = std::env::var("KITTENSCREW_API_KEY").unwrap_or_else(|_| "x".into());
+            Box::new(
+                RigDriver::new(Some(&base), model, &key)
+                    .map_err(|e| KittenError::Validation(format!("driver: {e}")))?,
+            )
+        }
+        _ => Box::new(
+            HttpDriver::codestral()
+                .map_err(|e| KittenError::Validation(format!("driver: {e}")))?,
+        ),
+    };
+    let model_label = driver.model().to_string();
     let rep = bench(
-        &driver,
+        driver.as_ref(),
         &BenchOpts {
             store_path: store,
             k,
@@ -493,7 +514,7 @@ fn bench_cmd(
     let n = rep.nodes;
     let yn = |b: bool| if b { "yes" } else { "no" };
     let body = format!(
-        "A/B over {k} trial(s), {n} node(s) — same model (codestral), only the harness differs\n\
+        "A/B over {k} trial(s), {n} node(s) — same model ({model_label}), only the harness differs\n\
          bare      : pass^1={:>3}  full-rate={:>3.0}%  mean-green={:.2}/{n}\n\
          kittenscrw: pass^1={:>3}  full-rate={:>3.0}%  mean-green={:.2}/{n}\n\
          DELTA     : full-rate {:+.0}pp   mean-green {:+.2}",

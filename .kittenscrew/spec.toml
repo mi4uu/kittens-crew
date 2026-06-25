@@ -1465,6 +1465,19 @@ value = 5
 difficulty = 4
 risk = 3
 
+[[task]]
+id = "T85"
+status = "todo"
+task = "Command-shape tripwire + light karma penalty (backlog, optional) — extend T64 tripwire / T79 karma with LIGHT signals (flag / small bad-karma, NOT hard blocks): (a) risky complex shell commands — chains of & and |, masses of pipes, constructs that at a glance look unlikely to actually work; (b) aimless directory-walking (cd hopping around the tree); (c) confine WHERE an agent may run commands — exec-location scope / blast-radius, extending T64 path-escape from file write targets to command CWD. User: lightly penalize these; optional, not for now."
+deps = []
+priority = 9
+cites = []
+scope = ["kittenscrew/src/driver/tripwire.rs"]
+note = "User 2026-06-25, deferred. Half overlaps T64 (path-escape already confines file targets; this extends to command execution location). The complex-command heuristic is intentionally fuzzy (a LIGHT karma nudge, not a categorical block) so it never hard-stops a legitimate-but-ugly one-liner."
+value = 2
+difficulty = 2
+risk = 1
+
 [[bug]]
 id = "B1"
 date = "2026-06-24"
