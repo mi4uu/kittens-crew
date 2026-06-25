@@ -24,6 +24,7 @@ pub(crate) fn run(cli: Cli) -> Result<(), KittenError> {
         Cmd::Plan { action } => plan_cmd(action),
         Cmd::Check { action } => check_cmd(action),
         Cmd::Score => score_cmd(),
+        Cmd::Run { max_iters } => run_cmd(max_iters),
         Cmd::Config { action } => config_cmd(action),
         Cmd::Compression { action } => compression_cmd(action),
         Cmd::Docs { action } => docs_cmd(action),
@@ -356,6 +357,40 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
             Ok(())
         }
     }
+}
+
+/// T62/T65 — drive the DAG: fill ready code leaves via Codestral, verify each
+/// compiles, advance. Minimal front door for the harness (full flag surface — yolo,
+/// budget, driver selection — is the rest of T65/T64/T70).
+fn run_cmd(max_iters: u32) -> Result<(), KittenError> {
+    use crate::driver::api::HttpDriver;
+    use crate::driver::drive::{drive, DriveOpts, Outcome};
+
+    let driver = HttpDriver::codestral()
+        .map_err(|e| KittenError::Validation(format!("driver: {e}")))?;
+    let k = kitty::lookup("builder").expect("builder kitty");
+    let opts = DriveOpts {
+        max_iters,
+        store_path: std::path::PathBuf::from(store::STORE_PATH),
+    };
+    let outcome = drive(&driver, &opts, |id, model| {
+        println!("{}", kitty::say(k, &format!("{id} → done ({model})")));
+    })
+    .map_err(KittenError::Validation)?;
+
+    let msg = match outcome {
+        Outcome::Converged { done } => {
+            format!("converged — {done} node(s) green, frontier empty")
+        }
+        Outcome::CapReached { done } => {
+            format!("iteration cap hit — {done} node(s) done, work remains")
+        }
+        Outcome::Halted { node, reason, done } => {
+            format!("halted at {node}: {reason} ({done} done before stop)")
+        }
+    };
+    println!("{}", kitty::say(k, &msg));
+    Ok(())
 }
 
 fn check_cmd(action: CheckAction) -> Result<(), KittenError> {

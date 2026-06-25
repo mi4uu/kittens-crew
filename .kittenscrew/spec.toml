@@ -1112,7 +1112,7 @@ risk = 2
 
 [[task]]
 id = "T60"
-status = "todo"
+status = "done"
 task = "Driver trait — backend-agnostic model boundary: dispatch(scoped_prompt, tools, role) -> TurnResult. Isolates the DAG/gate/verify layer from any single provider/agent (keeps AGENT-AGNOSTIC). The seam where 'who runs the turn' is swappable."
 deps = []
 priority = 1
@@ -1138,7 +1138,7 @@ risk = 3
 
 [[task]]
 id = "T62"
-status = "todo"
+status = "done"
 task = "DAG-driven drive loop — the active orchestrator. Each step: plan ready/next picks the next ready node -> dispatch a SCOPED prompt (only that node's spec slice + acceptance) -> collect TurnResult -> verify -> mark done/fail -> advance. Done = all nodes green (deterministic), not 'model said done'. Bounded by [driver] max_iters."
 deps = ["T60"]
 priority = 1
@@ -1154,7 +1154,7 @@ risk = 3
 
 [[task]]
 id = "T63"
-status = "todo"
+status = "done"
 task = "Per-node verification gate — after a node's turn, run its acceptance check (check done / check variance / §V validate scoped to the node) BEFORE marking done. Fail -> demote x->~, re-dispatch or escalate. Deterministic per-node completion criterion."
 deps = ["T62"]
 priority = 2
@@ -1302,10 +1302,42 @@ deps = [
 priority = 4
 cites = ["§I"]
 scope = ["kittenscrew/src/driver/modelpick.rs"]
-note = "User: harness small and large models. = the North-Star 'move work DOWN the model-size ladder' made per-node. A ModelStrategy in the ironclaw-style strategy planner; routes via the rig provider set (T61)."
+note = "User: harness small and large models = the North-Star 'move work DOWN the model-size ladder' made per-node. A ModelStrategy in the ironclaw-style strategy planner; routes via the rig provider set (T61). REALIZE AS SOFT PREFERENCES (weighted scoring), NOT bans/allowlists (user: 'preferencje nie bany'): per-node ROLE (coding|research|conversational/cat-voice|review) x per-model TRAIT table (coding-strength, ctx-window, speed, free-tier reliability) -> a preference score, combined with the T72 deterministic estimate + stored difficulty/risk/value. Seed rules (loose, overridable): coding node -> down-weight gemma/gemini (weak at code; probe-confirmed), prefer a coding-capable model (qwen3-coder/deepseek/poolside-laguna/glm tier); research/chat/cat-voice node -> gemma is fine and cheap. A WEIGHT degrades gracefully when the preferred model is rate-limited/down (the leash must still pick something); a BAN is brittle. DEFERRED past the thinnest proof (user: don't grow scope endlessly, but this WILL matter sooner or later) — keep priority low. Infra blocker: CCR Router currently force-routes every request to Router.default (gemma) regardless of requested model -> honoring a per-node model choice needs CCR fixed (honor requested model) or the driver hits OpenRouter directly. See memory model-preferences-not-bans + harness-benchmarks-and-trend-verdict."
 value = 5
 difficulty = 3
 risk = 3
+
+[[task]]
+id = "T74"
+status = "todo"
+task = "Bounded replan / recovery escalation — when a node's verify (T63) fails or execution diverges from plan: retry -> local-patch (re-dispatch the node with the failure output) -> full replan (planner re-derives only the affected subgraph; graph stays version-immutable). A FIRST-CLASS loop primitive, not buried in T62. This is the static-DAG's answer to plan-brittleness."
+deps = [
+    "T62",
+    "T63",
+]
+priority = 1
+cites = ["§I"]
+scope = ["kittenscrew/src/driver/recovery.rs"]
+note = "RESEARCH (2026 trend sweep, see memory harness-benchmarks-and-trend-verdict): static-plan brittleness is the #1 risk to the WHOLE thesis. ReAct wins raw pass-rate by re-deciding each step; a rigid DAG + weak recovery LOSES to a scrappy model-loop on messy tasks. 'Model fills leaves' is NOT the whole story — the quality of THIS layer decides whether kittenscrew beats a bare loop, more than the DAG itself. Defensible shape per arxiv 2604.11378 'From Agent Loops to Structured Graphs' (= kittenscrew on paper): 3-layer planner/runtime/recovery, escalation retry->local-patch->full-replan, planner re-derives the affected subgraph but the graph is immutable per version. READ that paper before building. Pairs with T69 checkpoint/rollback (revert before replan)."
+value = 5
+difficulty = 4
+risk = 5
+
+[[task]]
+id = "T75"
+status = "todo"
+task = "A/B benchmark harness — measure kittenscrew's WEIGHT honestly: same model in a naive model-driven loop (baseline: pi_agent_rust) vs kittenscrew (DAG-driven), report the DELTA + pass^k (k=1..4). The thinnest proof IS this A/B, not a solo demo. Adopt: Terminal-Bench 2.0 (Harbor) primary, tau2-bench for pass^k consistency, SWE-bench Verified MINI subset, Aider polyglot subset as cheap regression baseline."
+deps = [
+    "T62",
+    "T63",
+]
+priority = 1
+cites = ["§I"]
+scope = ["benchmarks/ab/"]
+note = "RESEARCH (2026 bench sweep, see memory harness-benchmarks-and-trend-verdict). Why: 'gemma built a toy spec' proves nothing — only the same-model naive-vs-kittenscrew DELTA + pass^k measures whether the DAG is worth its weight (user: 'musimy miec kilka benchy zeby realnie ocenic wage'). ADOPT: Terminal-Bench 2.0 (harbor-framework, per-task Docker + deterministic verify-suite + oracle = literally a kittenscrew node; tb runner is model/agent-agnostic -> drive our Rust binary; ~50% ceiling = headroom), tau2-bench (sierra-research, pass^k = how to prove deterministic orchestrator beats flaky bare loop), SWE-bench Verified MINI (~50 via HAL, NOT full), Aider polyglot subset (cheap regression baseline incl. Rust; role = prove we never REGRESS the model below its naive score). SKIP: GAIA (saturated/exact-match), WebArena (flaky/expensive/wrong-domain), SWE-Lancer (gameable test-overwrite exploit), full SWE-Verified (saturated + too hard for free models = measures model not harness). Report pass^k not pass^1 (arxiv 2507.02825). Baseline opponent pi_agent_rust = Rust rewrite of pi (the model-picks-next legacy pattern we replace) = clean same-language A/B. Watch: SlopCodeBench (long-horizon coding degradation), HAL infra (cost reporting)."
+value = 5
+difficulty = 3
+risk = 2
 
 [[bug]]
 id = "B1"

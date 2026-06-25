@@ -8,6 +8,15 @@
 //! Safety (V34): autonomy is opt-in, hard-bounded by `max_iters`, and ANY flagged
 //! variance escalates to the real user (V27) instead of driving blindly on.
 
+//! Submodules for the standalone-harness pivot (T60+): the `api` Driver seam
+//! (model-agnostic dispatch), the `drive` DAG loop (T62), and per-node `verify`
+//! (T63). The autonomous Stop-hook decision core below (T52) stays here as the
+//! ClaudeCodeDriver embryo — re-exported so existing `crate::driver::*` callers
+//! (hook.rs) are unchanged.
+pub mod api;
+pub mod drive;
+pub mod verify;
+
 use crate::config::DriverCfg;
 use serde::{Deserialize, Serialize};
 use std::path::Path;

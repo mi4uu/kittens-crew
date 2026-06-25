@@ -34,6 +34,14 @@ pub enum Cmd {
     },
     /// Graded conformance score (T48, V31): how close to ideal, 0-100% per dim.
     Score,
+    /// Drive the DAG autonomously (T62/T65): the harness takes each ready code
+    /// leaf, dispatches a scoped prompt to a Driver, verifies it compiles (T63),
+    /// and advances. The harness drives; the model only fills leaves.
+    Run {
+        /// Max nodes to drive before yielding (V34 hard bound).
+        #[arg(long, default_value_t = 20)]
+        max_iters: u32,
+    },
     /// Hook orchestration (T5-T8). Reads JSON from stdin (Claude Code hook contract).
     Hook {
         /// Hook event: session-start | pre-tool | post-tool | pre-compact.
