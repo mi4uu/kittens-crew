@@ -168,8 +168,15 @@ pub fn evaluate(rules: &Ruleset, action: &Action) -> Verdict {
 /// under `workspace_root`. Uses lexical `starts_with` after resolving `..`
 /// components so the check is purely deterministic.
 fn check_path_escape(rules: &Ruleset, path: &Path) -> Option<Verdict> {
-    let resolved = lexical_clean(path);
     let root = lexical_clean(&rules.workspace_root);
+    // A RELATIVE target is interpreted relative to the workspace root (the normal case:
+    // scope paths are project-relative). Only `..` segments can then escape upward.
+    let abs = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        root.join(path)
+    };
+    let resolved = lexical_clean(&abs);
     if !resolved.starts_with(&root) {
         return Some(Verdict::fired(
             "path-escape",
