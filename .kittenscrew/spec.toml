@@ -1533,6 +1533,19 @@ value = 4
 difficulty = 3
 risk = 2
 
+[[task]]
+id = "T90"
+status = "todo"
+task = "MVP — standalone usable harness, SAFE BY DEFAULT (user 2026-06-25: want it usable ASAP, no claude-code, start using/testing on the side and refine in real use). The thinnest runnable version, NOT the smartest. Requires: (1) FIX T86 first — must end up NOT WORSE than the bare loop; (2) wire the RUNAWAY FILTER into drive() — tripwire T64 + doomloop T67 + budget T70 — so infinite spirals / doom-loops / over-budget runs are caught and stopped; (3) DEFAULT SANDBOX (the default safety mode, ON unless overridden): confine ALL file writes AND command execution to the PROJECT DIRECTORY and BELOW, never above — tripwire path-escape with workspace_root=cwd, Block any target that escapes upward; exec-location confinement (T85). No access above the project root; (4) run ergonomics: point at a small local model (env override done), run a spec, safety on by default, watch a simple task through end-to-end; (5) basic CURATED toolset added ONE AT A TIME — start with the code-leaf write that exists, add read-file / run-command as needed, experiment and catch gaps in use. DEFER past this MVP: the full karma/intervention sophistication (T79-T84 integration), TUI (T89), model-pick (T73), failover (T88). Usable+safe first, smart later."
+deps = ["T86"]
+priority = 1
+cites = []
+scope = ["kittenscrew/src/driver/drive.rs"]
+note = "User MVP cut 2026-06-25. Reorders the roadmap: the SAFETY subset (tripwire/doomloop/budget + default project-dir sandbox) is MVP-critical and comes BEFORE the karma/intervention intelligence (T84). Ship safe+usable, iterate in real use, add tools incrementally. The default sandbox (project dir + below, nothing above) is a hard security default, not optional."
+value = 5
+difficulty = 3
+risk = 3
+
 [[bug]]
 id = "B1"
 date = "2026-06-24"
