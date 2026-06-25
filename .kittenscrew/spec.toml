@@ -1528,7 +1528,7 @@ deps = [
 priority = 4
 cites = []
 scope = ["kittenscrew/src/tui.rs"]
-note = "User reference image: systemd boot log split-pane — left scrollable [ OK ]-tagged lines (one event each, bold keyword, `··` truncation, pink left-bar on selection), right detail pane, bottom `1964/1964` counter + `>` filter. = fzf --preview semantics. Likely ratatui. See memory tui-report-surfacing-fzf-preview."
+note = "User 2026-06-25. V1 APPROACH (do NOT over-invest): wrap the REAL fzf binary, do not build a custom ratatui TUI yet. fzf already gives fuzzy live-search, a --preview pane, --bind keybindings, and the position/total counter for free — exactly the systemd-boot-log split look from the reference image. So v1 = pipe the harness one-line event stream (T78 Event::line(), T76 OrchScore.line(), status heartbeats T68) into fzf with --preview that expands the selected events full detail (look up by id), plus a few --bind shortcuts. Follow/tail the live stream (fzf --tail or a reload bind). See what is comfortable in practice (w praniu); shortcuts will reveal themselves through use. Build a custom ratatui TUI ONLY if fzf proves insufficient. Reference image: split pane, [ OK ]-tagged one-line events, bold keyword + `··` truncation, pink left-bar on selection, right detail pane, bottom 1964/1964 counter + `>` filter. Memory tui-report-surfacing-fzf-preview."
 value = 4
 difficulty = 3
 risk = 2
