@@ -51,6 +51,12 @@ need_env() { [ -f "$ENV_FILE" ] || { echo "missing $ENV_FILE (copy .env.example)
 # macOS keeps them in the Keychain; Linux/other in a file.
 seed_auth() {
   local cdir="$1"
+  # Provider routing wins: if .env carries an API key (+ base-url), use ONLY that —
+  # never drop an OAuth .credentials.json beside it (mixing the two breaks auth).
+  if grep -q '^ANTHROPIC_API_KEY=' "$ENV_FILE" 2>/dev/null; then
+    echo "  auth: ANTHROPIC_API_KEY from .env (provider routing) — no OAuth seed"
+    return 0
+  fi
   if security find-generic-password -s "Claude Code-credentials" -w >/dev/null 2>&1; then
     security find-generic-password -s "Claude Code-credentials" -w > "$cdir/.credentials.json"
     echo "  auth: seeded host Keychain OAuth → $cdir/.credentials.json"
