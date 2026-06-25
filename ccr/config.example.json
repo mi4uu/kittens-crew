@@ -1,0 +1,37 @@
+{
+  "HOST": "0.0.0.0",
+  "PORT": 3456,
+  "LOG": false,
+  "APIKEY": "REPLACE_WITH_LOCAL_SHARED_SECRET",
+  "Providers": [
+    {
+      "name": "oneprovider",
+      "api_base_url": "https://api.oneprovider.dev/v1/messages",
+      "api_key": "REPLACE_WITH_ONEPROVIDER_KEY",
+      "models": [
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+        "claude-opus-4-6",
+        "sonnet-4-6",
+        "claude-haiku-4-5-20251001",
+        "fable-5"
+      ],
+      "transformer": { "use": ["Anthropic"] }
+    },
+    {
+      "name": "openrouter",
+      "api_base_url": "https://openrouter.ai/api/v1/chat/completions",
+      "api_key": "REPLACE_WITH_OPENROUTER_KEY",
+      "models": [
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "poolside/laguna-m.1:free",
+        "nousresearch/hermes-3-llama-3.1-405b:free",
+        "google/gemma-4-31b-it:free"
+      ],
+      "transformer": { "use": ["openrouter"] }
+    }
+  ],
+  "Router": {
+    "default": "openrouter,google/gemma-4-31b-it:free"
+  }
+}

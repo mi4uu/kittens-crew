@@ -1,0 +1,33 @@
+# Central, always-on header-hygiene router. One place, reachable from everywhere:
+#   docker compose up -d        # start
+#   docker compose logs -f      # watch
+# Point any Claude Code at it:
+#   ANTHROPIC_BASE_URL=http://localhost:3456
+#   ANTHROPIC_API_KEY=<APIKEY from config.json>
+services:
+  ccr:
+    build: .
+    image: ccr-router:local
+    container_name: ccr
+    ports:
+      - "3456:3456"
+    volumes:
+      - ./config.json:/root/.claude-code-router/config.json:ro
+    restart: unless-stopped
+
+  # Failover shim: retries /v1/messages across an ordered list of free models
+  # (different OpenRouter upstreams) when one 429s, times out, or errors.
+  # Point clients HERE (:3460) for resilience; :3456 is the single-model path.
+  failover:
+    image: node:22-slim
+    container_name: ccr-failover
+    depends_on: [ccr]
+    ports:
+      - "3460:3460"
+    volumes:
+      - ./failover.js:/failover.js:ro
+    environment:
+      - UPSTREAM=http://ccr:3456
+      - PORT=3460
+    command: ["node", "/failover.js"]
+    restart: unless-stopped

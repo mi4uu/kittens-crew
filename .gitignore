@@ -25,6 +25,9 @@ kittenscrew/target/
 claudeoneprovider.sh
 claudeopenrouter.sh
 
+# ccr router secrets (holds local APIKEY + oneprovider key)
+ccr/config.json
+
 # arena benchmark runtime
 benchmarks/arena/state/
 benchmarks/arena/.env
