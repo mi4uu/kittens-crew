@@ -1460,7 +1460,7 @@ deps = [
 priority = 0
 cites = []
 scope = ["kittenscrew/src/driver/drive.rs"]
-note = "Integration keystone. Also closes the yolo/budget flag-parsed-but-not-enforced debt from T65. Serial (mutates drive.rs); built after the T79-T83 fan-out lands."
+note = "Integration keystone. Also closes the yolo/budget flag-parsed-but-not-enforced debt from T65. Serial (mutates drive.rs); built after the T79-T83 fan-out lands. RESPONSE-EXECUTION PROTOCOL (user 2026-06-25, resolves the how-do-talking-strategies-run question): the talking strategies run as structured prompts behind a FORMAT GATE. ExplainSelfAssess = the explain-prompt goes STRAIGHT to the offending agent; it must answer in the EXPECTED FORMAT (why + does it genuinely believe it will solve in the next few moves, not just repeat). PeerConfront = the SAME explain-prompt goes to the offender FIRST; only if it answers in the expected format is that ready explanation forwarded to ANOTHER agent (a critic / agent-psychologist judge) who decides. FORMAT FAILURE = immediate STOP / deal-breaker: an agent that cannot even produce a well-formed explanation is itself the problem. So both talking strategies share step 1 (offender explains in-format) and the required format IS the gate."
 value = 5
 difficulty = 4
 risk = 3
