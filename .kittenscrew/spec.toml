@@ -1381,6 +1381,90 @@ value = 5
 difficulty = 4
 risk = 3
 
+[[task]]
+id = "T79"
+status = "todo"
+task = "Action-health karma core (karma.rs) — per-agent good_karma/bad_karma, both f64 start 0, floored at 0. Per-action score deltas: failed/errored action +0.3 bad; action identical to previous +0.3 bad (repeat+error stacks to +0.6); same command 2x consecutive +0.2 bad, 3x consecutive +0.5 bad (escalating); bad params / usage error counts as error; successful action +0.2 good (regardless of result content). After each action BOTH karmas decay -0.1 but never below 0. health = good_karma - bad_karma. Rough scoring, small decay (user). Pure deterministic, offline. Feeds the intervention ladder."
+deps = []
+priority = 0
+cites = []
+scope = ["kittenscrew/src/driver/karma.rs"]
+note = "User design 2026-06-25. Generalizes T67 doomloop (one signal among many) into a continuous behavioural-health score. Premise: every agent action + result passes through the harness so it is observable + scorable. Numbers are the user-given rough seeds, overridable."
+value = 5
+difficulty = 2
+risk = 2
+
+[[task]]
+id = "T80"
+status = "todo"
+task = "Sequence-cycle detector (cycle.rs) — beyond doomloop identical-consecutive (T67): detect cycling through a repeating sequence A->B->A->B = also a loop (zombie agent walking in circles). Period/cycle detection over recent action signatures. Output feeds the karma repeat-signal (T79) and the doom-loop guard. Pure deterministic, offline."
+deps = []
+priority = 0
+cites = []
+scope = ["kittenscrew/src/driver/cycle.rs"]
+note = "User: read x -> read y -> read x -> read y is a loop too. Complements T67 (identical-consecutive) with period detection. Self-contained: in/out are action-signature strings + a bool/period, no cross-module type dependency."
+value = 4
+difficulty = 3
+risk = 2
+
+[[task]]
+id = "T81"
+status = "todo"
+task = "Intervention ladder (intervene.rs) — map health (T79) + iteration counts to an intervention level. health < -1 => soft: warn + ask agent (are you ok / do you know what you are doing / recent actions look worrying) then let it continue; health < -2 => hard: interrupt + demand explanation before continuing; health <= -3 => deal-breaker: terminate. Thresholds are DEFAULTS scaled by task weight (value/risk/difficulty + blast-radius) — heavy/blocking tasks get tighter cutoffs. SEPARATE iteration-limit axis: soft limit (warn + require a good explanation to continue) and hard limit (forced stop, no explanation helps). Research/data-gathering (non-blocking, splittable) gets a small grace of extra turns to DO something with gathered data, never to continue the madness. Pure deterministic decision core, offline."
+deps = ["T79"]
+priority = 0
+cites = []
+scope = ["kittenscrew/src/driver/intervene.rs"]
+note = "User: soft+hard limits, weighted by task importance + whether it blocks others. Takes health as a plain f64 + task fields + blast-radius usize so it is independently compilable from T79 (wire in T84)."
+value = 5
+difficulty = 3
+risk = 3
+
+[[task]]
+id = "T82"
+status = "todo"
+task = "Intervention response strategies (response.rs) — configurable what happens on intervention (default halt+replan). Options: (a) explain-and-self-assess: agent must explain + state whether it genuinely believes it will solve in the next few moves instead of repeating; (b) self-decide-with-explanation: let the agent choose to continue WITH an explanation — does NOT erase the fault, and if it continues badly the next warning re-triggers very fast (tightened threshold); (c) peer-confrontation: confront with ANOTHER agent, the offender explains, the peer agent decides; (d) halt+replan. Pure decision core selecting the strategy; the actual agent/peer calls sit behind the Driver seam. Offline-testable."
+deps = ["T81"]
+priority = 0
+cites = []
+scope = ["kittenscrew/src/driver/response.rs"]
+note = "User: halt+replan configurable; maybe make it explain + self-assess next-few-moves, or self-decide (fault not erased, fast re-warn), or peer-agent judges. Decision core is pure; selects a Strategy enum from an intervention level + policy config."
+value = 4
+difficulty = 3
+risk = 2
+
+[[task]]
+id = "T83"
+status = "todo"
+task = "Transcript -> evaluation capture (evaldump.rs) — on terminate/deal-breaker or zombie stop, capture the agent action transcript (actions + results) and queue it for OFFLINE evaluation to extract lessons for later (feeds rule/prompt improvements). Deterministic serialize to a durable record/queue. Offline."
+deps = ["T79"]
+priority = 0
+cites = []
+scope = ["kittenscrew/src/driver/evaldump.rs"]
+note = "User: zombie agent stop, transcript goes to evaluation for drawing conclusions for later. Self-contained serialize (serde) to a record; sink is a Write/path so tests use a buffer."
+value = 3
+difficulty = 2
+risk = 1
+
+[[task]]
+id = "T84"
+status = "todo"
+task = "Wire action-health into the drive loop (integration) — per action: record into karma (T79) + cycle (T80), evaluate intervention level (T81), apply the configured response strategy (T82), and on terminate dump the transcript (T83). Subsumes the standing yolo(T64)/budget(T70)/doomloop(T67) in-loop wiring debt: drive() consults the tripwire, budget, and doom/karma guards before/after each dispatch. Touches drive.rs. NOT part of the parallel module batch — serial after, since it depends on all five and mutates the shared loop."
+deps = [
+    "T79",
+    "T80",
+    "T81",
+    "T82",
+    "T83",
+]
+priority = 0
+cites = []
+scope = ["kittenscrew/src/driver/drive.rs"]
+note = "Integration keystone. Also closes the yolo/budget flag-parsed-but-not-enforced debt from T65. Serial (mutates drive.rs); built after the T79-T83 fan-out lands."
+value = 5
+difficulty = 4
+risk = 3
+
 [[bug]]
 id = "B1"
 date = "2026-06-24"
