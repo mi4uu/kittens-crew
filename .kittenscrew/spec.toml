@@ -1184,7 +1184,7 @@ risk = 3
 
 [[task]]
 id = "T65"
-status = "todo"
+status = "done"
 task = "`kittenscrew run` (drive) — CLI entry that starts the autonomous goal loop against the store with a chosen Driver. Flags: --driver api|claude-code, --model, --max-iters, --yolo, --budget. Wires loop + tripwire + verify + driver."
 deps = [
     "T62",

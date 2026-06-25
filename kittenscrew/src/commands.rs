@@ -24,7 +24,15 @@ pub(crate) fn run(cli: Cli) -> Result<(), KittenError> {
         Cmd::Plan { action } => plan_cmd(action),
         Cmd::Check { action } => check_cmd(action),
         Cmd::Score => score_cmd(),
-        Cmd::Run { max_iters, max_retries } => run_cmd(max_iters, max_retries),
+        Cmd::Run {
+            driver,
+            model,
+            parallel,
+            yolo,
+            budget,
+            max_iters,
+            max_retries,
+        } => run_cmd(driver, model, parallel, yolo, budget, max_iters, max_retries),
         Cmd::Bench {
             store,
             k,
@@ -368,21 +376,79 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
 /// T62/T65 — drive the DAG: fill ready code leaves via Codestral, verify each
 /// compiles, advance. Minimal front door for the harness (full flag surface — yolo,
 /// budget, driver selection — is the rest of T65/T64/T70).
-fn run_cmd(max_iters: u32, max_retries: u32) -> Result<(), KittenError> {
-    use crate::driver::api::HttpDriver;
+#[allow(clippy::too_many_arguments)]
+fn run_cmd(
+    driver: String,
+    model: Option<String>,
+    parallel: bool,
+    yolo: bool,
+    budget: Option<u64>,
+    max_iters: u32,
+    max_retries: u32,
+) -> Result<(), KittenError> {
+    use crate::driver::api::{Driver, HttpDriver, RigDriver};
+    use crate::driver::delegation::drive_parallel;
     use crate::driver::drive::{drive, DriveOpts, Outcome};
 
-    let driver = HttpDriver::codestral()
-        .map_err(|e| KittenError::Validation(format!("driver: {e}")))?;
     let k = kitty::lookup("builder").expect("builder kitty");
     let opts = DriveOpts {
         max_iters,
         max_retries,
         store_path: std::path::PathBuf::from(store::STORE_PATH),
     };
-    let outcome = drive(&driver, &opts, |id, model| {
-        println!("{}", kitty::say(k, &format!("{id} → done ({model})")));
-    })
+
+    // YOLO (T64) and budget (T70) modules exist standalone; wiring their enforcement
+    // INTO the drive loop is a follow-up (drive() takes neither yet). Surface intent
+    // honestly rather than silently ignoring the flags.
+    if yolo {
+        println!("{}", kitty::say(k, "yolo — tripwire gate (T64) is the only guard; in-loop wiring pending"));
+    }
+    if let Some(cap) = budget {
+        println!("{}", kitty::say(k, &format!("budget ~{cap} tokens noted (T70); in-loop enforcement pending")));
+    }
+
+    // Serial (T62) vs scope-disjoint parallel (T77), generic over the concrete Driver.
+    fn go<D: Driver + Sync>(d: &D, opts: &DriveOpts, parallel: bool, k: &kitty::Kitty) -> Result<Outcome, String> {
+        let prog = |id: &str, model: &str| {
+            println!("{}", kitty::say(k, &format!("{id} → done ({model})")));
+        };
+        if parallel {
+            drive_parallel(d, opts, prog)
+        } else {
+            drive(d, opts, prog)
+        }
+    }
+
+    let outcome = match driver.as_str() {
+        "claude-code" => {
+            return Err(KittenError::Validation(
+                "claude-code driver not built yet (T71, tmux backend) — use --driver api".into(),
+            ))
+        }
+        "api" => match model {
+            // A chosen model routes through the multi-provider rig backend (T61).
+            Some(m) => {
+                let d = RigDriver::from_env(
+                    Some("https://codestral.mistral.ai/v1"),
+                    m,
+                    "CODESTRAL_API_KEY",
+                )
+                .map_err(|e| KittenError::Validation(format!("driver: {e}")))?;
+                go(&d, &opts, parallel, k)
+            }
+            // Default: the proven codestral HTTP driver.
+            None => {
+                let d = HttpDriver::codestral()
+                    .map_err(|e| KittenError::Validation(format!("driver: {e}")))?;
+                go(&d, &opts, parallel, k)
+            }
+        },
+        other => {
+            return Err(KittenError::Validation(format!(
+                "unknown driver `{other}` — expected `api` or `claude-code`"
+            )))
+        }
+    }
     .map_err(KittenError::Validation)?;
 
     let msg = match outcome {

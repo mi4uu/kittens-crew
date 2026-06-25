@@ -38,6 +38,21 @@ pub enum Cmd {
     /// leaf, dispatches a scoped prompt to a Driver, verifies it compiles (T63),
     /// and advances. The harness drives; the model only fills leaves.
     Run {
+        /// Backend: `api` (rig/HTTP, default) | `claude-code` (tmux, T71 — not built yet).
+        #[arg(long, default_value = "api")]
+        driver: String,
+        /// Model id for the api driver (routes through RigDriver). Omit → codestral default.
+        #[arg(long)]
+        model: Option<String>,
+        /// Drive scope-disjoint ready batches concurrently (T77) instead of one node at a time.
+        #[arg(long)]
+        parallel: bool,
+        /// YOLO mode (T64): no per-tool dialogs — only the tripwire negative filter gates.
+        #[arg(long)]
+        yolo: bool,
+        /// Rough token budget cap for the run (T70). Surfaced now; in-loop enforcement is pending.
+        #[arg(long)]
+        budget: Option<u64>,
         /// Max nodes to drive before yielding (V34 hard bound).
         #[arg(long, default_value_t = 20)]
         max_iters: u32,
