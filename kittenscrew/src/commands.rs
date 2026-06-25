@@ -395,6 +395,8 @@ fn run_cmd(
         max_iters,
         max_retries,
         store_path: std::path::PathBuf::from(store::STORE_PATH),
+        // Safe by default (T90): confine all scope writes to the project dir and below.
+        workspace_root: Some(std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))),
     };
 
     // YOLO (T64) and budget (T70) modules exist standalone; wiring their enforcement

@@ -117,7 +117,7 @@ mod tests {
         let mut order = Vec::new();
         let out = drive(
             &sim,
-            &DriveOpts { max_iters: 10, max_retries: 0, store_path: store },
+            &DriveOpts { max_iters: 10, max_retries: 0, store_path: store, workspace_root: None },
             |id, _| order.push(id.to_string()),
         )
         .unwrap();
@@ -138,7 +138,7 @@ mod tests {
         let sim = SimDriver::new().on("flaky", SimBehavior::FailThenOk(1));
         let out = drive(
             &sim,
-            &DriveOpts { max_iters: 5, max_retries: 2, store_path: store },
+            &DriveOpts { max_iters: 5, max_retries: 2, store_path: store, workspace_root: None },
             |_, _| {},
         )
         .unwrap();

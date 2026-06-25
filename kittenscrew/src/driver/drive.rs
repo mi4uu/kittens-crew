@@ -19,6 +19,11 @@ pub struct DriveOpts {
     /// back as a local patch, up to this many times before halting. 0 = no retry.
     pub max_retries: u32,
     pub store_path: PathBuf,
+    /// Default sandbox (T64/T90): when set, every node's scope target must resolve
+    /// INSIDE this root — a write that escapes upward (outside the project) is blocked
+    /// before the model is even called. `None` = no confinement (e.g. the A/B bench,
+    /// which materialises scopes in an isolated temp dir it owns).
+    pub workspace_root: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -75,6 +80,24 @@ pub fn drive(
             });
         };
         let target = PathBuf::from(target);
+
+        // Default sandbox (T64/T90): refuse to write outside the workspace root BEFORE
+        // calling the model. A path-escape is a blocked node, not a halt — retire it and
+        // drive on (same T86 continue-past-failure semantics).
+        if let Some(root) = &opts.workspace_root {
+            let rules = super::tripwire::Ruleset::default_at(root.clone());
+            let verdict = super::tripwire::evaluate(
+                &rules,
+                &super::tripwire::Action::Write { path: target.clone(), lines: 0 },
+            );
+            if verdict.action == super::tripwire::TripAction::Block {
+                mark_status(&opts.store_path, &id, Status::Killed)?;
+                progress(&id, &format!("✗ blocked: {}", verdict.reason));
+                failed.push(id);
+                continue;
+            }
+        }
+
         if let Some(parent) = target.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -268,6 +291,7 @@ mod tests {
             max_iters: 5,
             max_retries: 2,
             store_path: store_path.clone(),
+            workspace_root: None,
         };
         let out = drive(&driver, &opts, |_, _| {}).unwrap();
         assert!(matches!(out, Outcome::Converged { done: 1 }), "got {out:?}");
@@ -317,7 +341,7 @@ mod tests {
         )
         .unwrap();
 
-        let opts = DriveOpts { max_iters: 10, max_retries: 1, store_path: store_path.clone() };
+        let opts = DriveOpts { max_iters: 10, max_retries: 1, store_path: store_path.clone(), workspace_root: None };
         let out = drive(&PartlyBroken, &opts, |_, _| {}).unwrap();
 
         match out {
@@ -327,6 +351,50 @@ mod tests {
             other => panic!("expected Halted(A failed) with done=1, got {other:?}"),
         }
         assert!(verify::rustc_compiles(&b).ok, "B's file must compile");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T90 default sandbox: a scope path that escapes the workspace root is BLOCKED
+    /// before the model is called and never written outside the project.
+    #[test]
+    fn workspace_confinement_blocks_escape() {
+        use crate::driver::api::{Driver, DriverError, Turn, TurnResult};
+
+        struct Any;
+        impl Driver for Any {
+            fn dispatch(&self, _t: &Turn) -> Result<TurnResult, DriverError> {
+                Ok(TurnResult { text: "```rust\npub fn x() {}\n```".into(), model: "any".into() })
+            }
+            fn model(&self) -> &str {
+                "any"
+            }
+        }
+
+        let dir = std::env::temp_dir().join(format!("ks_conf_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let root = dir.join("project");
+        std::fs::create_dir_all(&root).unwrap();
+        let store_path = dir.join("spec.toml");
+        let escape = dir.join("escape.rs"); // sibling of project/ → OUTSIDE the root
+        std::fs::write(
+            &store_path,
+            format!(
+                "schema = 1\n\n[[task]]\nid = \"E\"\nstatus = \"todo\"\ntask = \"x\"\ndeps = []\npriority = 1\nscope = [{:?}]\n",
+                escape.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+
+        let opts = DriveOpts {
+            max_iters: 5,
+            max_retries: 0,
+            store_path: store_path.clone(),
+            workspace_root: Some(root.clone()),
+        };
+        let out = drive(&Any, &opts, |_, _| {}).unwrap();
+
+        assert!(matches!(out, Outcome::Halted { .. }), "escape must be blocked → Halted, got {out:?}");
+        assert!(!escape.exists(), "must NOT write outside the workspace root");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

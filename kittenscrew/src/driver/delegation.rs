@@ -172,7 +172,7 @@ mod tests {
         let mut done_ids = Vec::new();
         let out = drive_parallel(
             &sim,
-            &DriveOpts { max_iters: 10, max_retries: 0, store_path: sp },
+            &DriveOpts { max_iters: 10, max_retries: 0, store_path: sp, workspace_root: None },
             |id, _| done_ids.push(id.to_string()),
         )
         .unwrap();

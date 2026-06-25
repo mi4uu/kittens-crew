@@ -136,6 +136,8 @@ fn run_harness(
             max_iters: opts.max_iters,
             max_retries: opts.max_retries,
             store_path: store_path.clone(),
+            // No confinement: the bench materialises scopes in an isolated temp dir it owns.
+            workspace_root: None,
         },
         |_, _| {},
     )?;
