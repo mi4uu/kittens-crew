@@ -1277,6 +1277,36 @@ value = 3
 difficulty = 4
 risk = 3
 
+[[task]]
+id = "T72"
+status = "todo"
+task = "Deterministic scope/cost estimator — classic (non-LLM) tooling to understand each task's situation + size: file/LOC scope (cloc-style), dependency-graph position (fan-in/out, critical-path depth), complexity heuristics, rough token/effort cost. Per-node estimate feeds parallelization (T62 ready-set), rough budget (T70), and model right-sizing (T73). Offload UNDERSTANDING to deterministic Rust; reserve the model for judgement."
+deps = []
+priority = 2
+cites = ["§I"]
+scope = ["kittenscrew/src/driver/estimate.rs"]
+note = "User: classic deterministic tools help understand the situation + plan. If you know what's to be done and roughly its scope, you can divide + parallelize the work. North-star aligned (offload deterministic work to Rust). Leverages existing per-task difficulty/risk/value fields."
+value = 5
+difficulty = 3
+risk = 2
+
+[[task]]
+id = "T73"
+status = "todo"
+task = "Model right-sizing strategy — the planner's ModelStrategy picks small <-> large model per node from the deterministic estimate (T72) + stored difficulty/risk/value: small/cheap model for low-scope leaf nodes, large model for high-difficulty/high-risk ones. Harness small AND large models by UNDERSTOOD scope, not by guess."
+deps = [
+    "T72",
+    "T61",
+    "T62",
+]
+priority = 4
+cites = ["§I"]
+scope = ["kittenscrew/src/driver/modelpick.rs"]
+note = "User: harness small and large models. = the North-Star 'move work DOWN the model-size ladder' made per-node. A ModelStrategy in the ironclaw-style strategy planner; routes via the rig provider set (T61)."
+value = 5
+difficulty = 3
+risk = 3
+
 [[bug]]
 id = "B1"
 date = "2026-06-24"
