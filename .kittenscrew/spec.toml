@@ -1110,6 +1110,173 @@ value = 3
 difficulty = 3
 risk = 2
 
+[[task]]
+id = "T60"
+status = "todo"
+task = "Driver trait — backend-agnostic model boundary: dispatch(scoped_prompt, tools, role) -> TurnResult. Isolates the DAG/gate/verify layer from any single provider/agent (keeps AGENT-AGNOSTIC). The seam where 'who runs the turn' is swappable."
+deps = []
+priority = 1
+cites = ["§I"]
+scope = ["kittenscrew/src/driver/mod.rs"]
+note = "Foundation of the standalone-harness pivot: kittenscrew DRIVES the model instead of waiting for it. Backends: ApiDriver(rig) first, ClaudeCodeDriver(tmux) later."
+value = 5
+difficulty = 2
+risk = 2
+
+[[task]]
+id = "T61"
+status = "todo"
+task = "ApiDriver via the `rig` crate — multi-provider API backend (OpenRouter/Anthropic/local). Primary backend for the standalone harness; API-direct made affordable by mixing/routing providers."
+deps = ["T60"]
+priority = 2
+cites = ["§I"]
+scope = ["kittenscrew/src/driver/api.rs"]
+note = "rig ~0.37 (both gi-dellav projects use it; chosen to solve the 'which lib' problem). provider+model from [driver] config. Routing/repair/cache = a SEPARATE future server (CCR+failover is its embryo), not here."
+value = 5
+difficulty = 3
+risk = 3
+
+[[task]]
+id = "T62"
+status = "todo"
+task = "DAG-driven drive loop — the active orchestrator. Each step: plan ready/next picks the next ready node -> dispatch a SCOPED prompt (only that node's spec slice + acceptance) -> collect TurnResult -> verify -> mark done/fail -> advance. Done = all nodes green (deterministic), not 'model said done'. Bounded by [driver] max_iters."
+deps = ["T60"]
+priority = 1
+cites = [
+    "V34",
+    "V27",
+]
+scope = ["kittenscrew/src/driver/drive.rs"]
+note = "THE answer to 'we wait for the smart model': DAG drives, model fills leaves. Evolution of the existing `hook stop` autonomous driver into a real harness. Moat vs pi/zerostack/caveman — none has an authoritative DAG."
+value = 5
+difficulty = 4
+risk = 3
+
+[[task]]
+id = "T63"
+status = "todo"
+task = "Per-node verification gate — after a node's turn, run its acceptance check (check done / check variance / §V validate scoped to the node) BEFORE marking done. Fail -> demote x->~, re-dispatch or escalate. Deterministic per-node completion criterion."
+deps = ["T62"]
+priority = 2
+cites = [
+    "V18",
+    "V19",
+    "V25",
+]
+scope = ["kittenscrew/src/driver/verify.rs"]
+note = "Turns the existing check-done/variance gates into the loop's done-ness oracle. Wrap, don't reimplement."
+value = 5
+difficulty = 3
+risk = 2
+
+[[task]]
+id = "T64"
+status = "todo"
+task = "Tripwire gate — YOLO by default (no per-tool dialogs) with a config negative filter catching actions that 'don't look right / overreached': path-escape outside workspace, rm/delete, secret-touch, oversized diff, network egress, git push --force. Per-tripwire action: block | ask | flag+snapshot."
+deps = ["T62"]
+priority = 2
+cites = ["V33"]
+scope = ["kittenscrew/src/driver/tripwire.rs"]
+note = "User ask: yolo + config exceptions. Mechanism = PreToolUse-style block (pi/caveman), allow-by-default. Extends existing [guard] blocked_cmds + [gate]. Determinism via filter, not prompting."
+value = 5
+difficulty = 3
+risk = 3
+
+[[task]]
+id = "T65"
+status = "todo"
+task = "`kittenscrew run` (drive) — CLI entry that starts the autonomous goal loop against the store with a chosen Driver. Flags: --driver api|claude-code, --model, --max-iters, --yolo, --budget. Wires loop + tripwire + verify + driver."
+deps = [
+    "T62",
+    "T64",
+    "T61",
+]
+priority = 3
+cites = ["§I"]
+scope = ["kittenscrew/src/commands.rs"]
+note = "Operator-facing front door for the harness. New [driver] keys: backend, provider, model, budget; [tripwire] rules."
+value = 5
+difficulty = 2
+risk = 2
+
+[[task]]
+id = "T66"
+status = "todo"
+task = "Steer + follow-up injection queues — two distinct points: steer (mid-run, before next turn) vs follow-up (post-stop re-arm). Drain modes (one-at-a-time | drain-all). Operator interrupt/redirect without restarting."
+deps = ["T62"]
+priority = 5
+cites = ["V34"]
+scope = ["kittenscrew/src/driver/queue.rs"]
+note = "Stolen from pi/caveman — the cleanest control surface they share."
+value = 3
+difficulty = 2
+risk = 1
+
+[[task]]
+id = "T67"
+status = "todo"
+task = "Doom-loop guard — deterministically block a repeated identical tool call / dispatch, independent of model state. Prevents the spin seen on the bare baseline."
+deps = ["T62"]
+priority = 5
+cites = ["V34"]
+scope = ["kittenscrew/src/driver/doomloop.rs"]
+note = "Stolen from zerostack/multistack. Pairs with the research-budget-governor idea (Explorer Kitty leash)."
+value = 3
+difficulty = 2
+risk = 1
+
+[[task]]
+id = "T68"
+status = "todo"
+task = "Status-socket liveness — the driver self-reports start/stop/blocked/done over a unix socket instead of parsing tmux scrollback. Robust out-of-band liveness for the loop + any supervisor."
+deps = ["T62"]
+priority = 5
+cites = ["V34"]
+scope = ["kittenscrew/src/driver/status.rs"]
+note = "Stolen from multistack. Fixes the arena tmux-peek pain (exit-124 watcher, blind polling)."
+value = 3
+difficulty = 2
+risk = 1
+
+[[task]]
+id = "T69"
+status = "todo"
+task = "Coupled checkpoint + rollback — snapshot code (shadow-git) AND loop/conversation state together per node; `rollback N` reverts both. A bad turn becomes fully undoable."
+deps = ["T62"]
+priority = 5
+cites = ["V34"]
+scope = ["kittenscrew/src/driver/checkpoint.rs"]
+note = "Stolen from caveman-code. Safety net for yolo mode alongside the tripwire gate."
+value = 4
+difficulty = 3
+risk = 2
+
+[[task]]
+id = "T70"
+status = "todo"
+task = "Budget as a loop primitive — track token/$ spend per loop and per node; a first-class termination condition and a cheap/expensive model-routing signal. WRAP squeez token-track, do not reimplement."
+deps = ["T62"]
+priority = 5
+cites = ["V34"]
+scope = ["kittenscrew/src/driver/budget.rs"]
+note = "Stolen from caveman-code (money as control signal). Constraint: never reimplement squeez features — wrap token-track only."
+value = 3
+difficulty = 2
+risk = 2
+
+[[task]]
+id = "T71"
+status = "todo"
+task = "ClaudeCodeDriver — drive the Claude Code CLI via tmux as a Driver backend (uses the best model in the CC subscription). Deferred-second backend; isolated as the CC-specific adapter, mirroring hook-layer isolation."
+deps = ["T60"]
+priority = 8
+cites = ["§I"]
+scope = ["kittenscrew/src/driver/claudecode.rs"]
+note = "Later. Standalone ApiDriver(rig) is the primary path; this keeps the subscription model reachable. Reuse arena tmux-drive learnings."
+value = 3
+difficulty = 4
+risk = 3
+
 [[bug]]
 id = "B1"
 date = "2026-06-24"
