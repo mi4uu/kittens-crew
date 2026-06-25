@@ -474,25 +474,23 @@ fn bench_cmd(
     max_iters: u32,
     max_retries: u32,
 ) -> Result<(), KittenError> {
-    use crate::driver::api::{Driver, HttpDriver, RigDriver};
+    use crate::driver::api::{Driver, HttpDriver};
     use crate::driver::bench::{bench, BenchOpts};
 
     // Endpoint override: point the bench at ANY OpenAI-compatible endpoint via env —
-    // Codestral, OpenRouter direct, or a local ollama (http://localhost:11434/v1) —
-    // else the proven codestral HTTP driver. Lets us prove the loop on a real model
-    // without a Codestral key (e.g. a small local ollama coder).
-    //   KITTENSCREW_BASE_URL=http://localhost:11434/v1 KITTENSCREW_MODEL=qwen2.5-coder \
-    //   KITTENSCREW_API_KEY=ollama kittenscrew bench --store toy.toml --k 1
+    // Codestral, OpenRouter direct, LM Studio (:1234) or ollama (:11434) — else the
+    // proven codestral driver. Uses the simple known-good HttpDriver (manual OpenAI
+    // request), NOT rig: a real run against LM Studio showed rig 0.39's agent path
+    // 500s where a plain /chat/completions POST succeeds.
+    //   KITTENSCREW_BASE_URL=http://localhost:1234/v1 KITTENSCREW_MODEL=qwen/qwen3.6-27b \
+    //   KITTENSCREW_API_KEY=lmstudio kittenscrew bench --store toy.toml --k 1
     let driver: Box<dyn Driver> = match (
         std::env::var("KITTENSCREW_BASE_URL").ok(),
         std::env::var("KITTENSCREW_MODEL").ok(),
     ) {
         (Some(base), Some(model)) => {
             let key = std::env::var("KITTENSCREW_API_KEY").unwrap_or_else(|_| "x".into());
-            Box::new(
-                RigDriver::new(Some(&base), model, &key)
-                    .map_err(|e| KittenError::Validation(format!("driver: {e}")))?,
-            )
+            Box::new(HttpDriver::openai(&base, model, key))
         }
         _ => Box::new(
             HttpDriver::codestral()

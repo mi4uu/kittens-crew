@@ -64,6 +64,22 @@ impl HttpDriver {
             timeout: Duration::from_secs(90),
         })
     }
+
+    /// Generic OpenAI-compatible `/chat/completions` endpoint — codestral,
+    /// openrouter direct, or a LOCAL server (LM Studio :1234, ollama :11434).
+    /// `base_url` is the API root WITHOUT `/chat/completions`
+    /// (e.g. `http://localhost:1234/v1`); `api_key` may be a dummy for local servers.
+    /// Higher `max_tokens` + timeout than codestral so a slow local reasoning model
+    /// (which spends tokens thinking before it answers) still emits a full file.
+    pub fn openai(base_url: &str, model: impl Into<String>, api_key: impl Into<String>) -> Self {
+        HttpDriver {
+            endpoint: format!("{}/chat/completions", base_url.trim_end_matches('/')),
+            api_key: api_key.into(),
+            model: model.into(),
+            max_tokens: 4096,
+            timeout: Duration::from_secs(180),
+        }
+    }
 }
 
 impl Driver for HttpDriver {
