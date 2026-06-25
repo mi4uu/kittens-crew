@@ -1528,7 +1528,7 @@ deps = [
 priority = 4
 cites = []
 scope = ["kittenscrew/src/tui.rs"]
-note = "User 2026-06-25. V1 APPROACH (do NOT over-invest): wrap the REAL fzf binary, do not build a custom ratatui TUI yet. fzf already gives fuzzy live-search, a --preview pane, --bind keybindings, and the position/total counter for free — exactly the systemd-boot-log split look from the reference image. So v1 = pipe the harness one-line event stream (T78 Event::line(), T76 OrchScore.line(), status heartbeats T68) into fzf with --preview that expands the selected events full detail (look up by id), plus a few --bind shortcuts. Follow/tail the live stream (fzf --tail or a reload bind). See what is comfortable in practice (w praniu); shortcuts will reveal themselves through use. Build a custom ratatui TUI ONLY if fzf proves insufficient. Reference image: split pane, [ OK ]-tagged one-line events, bold keyword + `··` truncation, pink left-bar on selection, right detail pane, bottom 1964/1964 counter + `>` filter. Memory tui-report-surfacing-fzf-preview."
+note = "PULLED INTO THE MVP (user 2026-06-25) as a SIMPLIFIED fzf view. Left = filterable one-line list, right = preview (one line in the list -> more detail in preview). THREE toggleable STREAM-CLASSES, all present, each filter/toggle on-off (= the noise knob made concrete): GENERAL = the opinion board (what cats say peer-to-peer), TO-ME = what cats say to the USER (Narrator narration, Boss plan reports, escalations), THOUGHTS = what they think (raw voice events: Maruda/Entropy/reasoning). fzf --bind toggles each stream; v1 wraps the real fzf binary, defer custom ratatui. Confirmed by crush (compact/expand = list-line/preview). Memories tui-report-surfacing-fzf-preview + kitty-role-architecture (the 3 streams ARE the council channels)."
 value = 4
 difficulty = 3
 risk = 2
@@ -1558,6 +1558,19 @@ note = "Research-derived 2026-06-25 (memory research-harness-landscape). The asi
 value = 4
 difficulty = 3
 risk = 2
+
+[[task]]
+id = "T92"
+status = "todo"
+task = "MVP execution order — the realistic attack sequence (user 2026-06-25). PHASE 0 (the gate): fix T86 (drive() continues past an unrecoverable INDEPENDENT node, mark it failed/blocked, Halted ONLY for a true stall) -> re-bench llama3.2 on the 2-independent-node hard.toml -> confirm delta >= 0 (harness no longer WORSE than bare). Nothing ships until this passes. PHASE 1: safe-by-default sandbox (T90) — spike nono wrapping ONE command; confine writes+command-exec to the project dir and BELOW, network blocked; circuit-breaker (3 denials -> abort turn); bash-arity command matching (anti prefix-gaming). PHASE 1.5: minimal snapshot/rollback — git stash/commit before a run, git reset to undo (cheap net; full shadow-git T87 later). PHASE 2: wire the RUNAWAY FILTER (tripwire T64 + doomloop T67 + budget T70) into drive(). PHASE 3: tool seam (AgentTool trait + registry, from pi/opencode) — write-leaf exists; add read-file + run-command (through the sandbox). PHASE 4: simplified fzf TUI (T89) in-MVP — 3 toggleable streams (general/board, to-me, thoughts). PHASE 5: run ergonomics on a small local model + a small spec, safety+TUI on; use on the side, catch gaps, iterate. DEFERRED past MVP: full karma/intervention (T84), competence/skills (T91), failover (T88), model-pick (T73), full shadow-git (T87)."
+deps = ["T86"]
+priority = 1
+cites = []
+scope = ["docs/orchestrator.md"]
+note = "The single referenceable MVP roadmap. Each phase ships something usable; Phase 0 is the hard gate (prove not-worse-than-bare before anything else). Safety (sandbox+runaway) before autonomous side-use."
+value = 5
+difficulty = 2
+risk = 1
 
 [[bug]]
 id = "B1"
