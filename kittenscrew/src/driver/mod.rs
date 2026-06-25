@@ -16,6 +16,8 @@
 pub mod api;
 pub mod bench;
 pub mod drive;
+pub mod scenario;
+pub mod sim;
 pub mod verify;
 
 use crate::config::DriverCfg;

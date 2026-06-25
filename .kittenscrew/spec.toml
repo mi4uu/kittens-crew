@@ -1339,6 +1339,19 @@ value = 5
 difficulty = 3
 risk = 2
 
+[[task]]
+id = "T76"
+status = "todo"
+task = "Orchestration lifecycle bench — isolated scenarios that measure MANAGEMENT, not code quality. Each scenario: code per node deliberately EASY (isolates orchestration from the model's code-skill) + one injected lifecycle event with a scripted ground-truth-correct harness move. CORE ANTI-METRIC: passivity — the orchestrator that WAITS for the model to stumble into the fix / for the user to push, instead of driving. Score per scenario = made-the-right-move AND zero user-nudges AND few wasted steps. Run A/B vs a passive model-driven baseline (pi_agent_rust) — the delta is the orchestration weight, and unlike the trivial-code A/B it is NOT zero."
+deps = ["T75"]
+priority = 1
+cites = ["§I"]
+scope = ["benchmarks/orchestration/"]
+note = "Sharpens T75 from 'does the code compile' to 'does the orchestrator DRIVE'. Source: memory measure-orchestration-not-code-quality. Code quality is model-bound (accept it); the moat is lifecycle orchestration (plan execution, situation assessment, team coordination through change). ISOLATED one-behaviour scenarios (user: 'wyizolowane benchmarki'), each with a deterministic ground-truth move we authored: (1) INITIATIVE/no-wait — ready node + no user input -> harness must dispatch on its own within 1 step (waiting/asking = fail); (2) REGRESSION-CATCH — inject an edit breaking a previously-green node/§V -> re-verify + catch WITHOUT being told; (3) RE-PLAN on requirement change — §T modified mid-run -> pick up the changed node + re-converge, not run the stale plan; (4) ESCALATE-vs-GUESS — genuinely underspecified node -> escalate/ask is correct, hallucinating is the fail (judgement); (5) BACKPROP on test fail -> record bug -> new §V invariant (ck:backprop) + fix, not blind retry; (6) ORDER/ROUTE — deps + parallel frontier -> right order, concurrent where allowed. THE cross-cutting metric across all: nudge-count (user pushes needed) + idle/wrong steps; passive 'wait for the model' = the failure being measured. Substrate already exists: §T DAG + §V invariants + §B bugs + backprop = the lifecycle machinery; this bench exercises exactly it. Baseline opponent: pi_agent_rust (model-picks-next = structurally passive on managerial events)."
+value = 5
+difficulty = 3
+risk = 2
+
 [[bug]]
 id = "B1"
 date = "2026-06-24"
