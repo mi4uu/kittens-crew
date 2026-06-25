@@ -41,11 +41,29 @@ pub fn drive(
     mut progress: impl FnMut(&str, &str),
 ) -> Result<Outcome, String> {
     let mut done = 0u32;
+    // T86: nodes whose verify never passed. They are retired (Killed) so they leave the
+    // ready frontier, but the run CONTINUES to other independent ready nodes instead of
+    // halting globally. Only a frontier emptied WITH failures is a real (partial) stall.
+    let mut failed: Vec<String> = Vec::new();
     for _ in 0..opts.max_iters {
         let store = Store::load(&opts.store_path).map_err(|e| e.to_string())?;
         let next = plan::next(&store).map(|t| (t.id.clone(), t.task.clone(), t.scope.clone()));
         let (id, task, scope) = match next {
-            None => return Ok(Outcome::Converged { done }),
+            None => {
+                return Ok(if failed.is_empty() {
+                    Outcome::Converged { done }
+                } else {
+                    Outcome::Halted {
+                        node: failed[0].clone(),
+                        reason: format!(
+                            "{} node(s) failed verify ({}); {done} independent node(s) still driven green",
+                            failed.len(),
+                            failed.join(", ")
+                        ),
+                        done,
+                    }
+                });
+            }
             Some(t) => t,
         };
 
@@ -88,15 +106,15 @@ pub fn drive(
             last_err = v.detail;
         }
         if !passed {
-            return Ok(Outcome::Halted {
-                node: id,
-                reason: format!(
-                    "verify failed after {} attempt(s): {}",
-                    opts.max_retries + 1,
-                    first_line(&last_err)
-                ),
-                done,
-            });
+            // T86: do NOT halt the whole run. Retire this node (Killed → leaves the ready
+            // frontier; its transitive dependents stay blocked since its dep never goes
+            // Done) and CONTINUE driving other independent ready nodes. A bare loop attempts
+            // every node independently; the harness must not score worse by abandoning
+            // recoverable independent work behind one bad node.
+            mark_status(&opts.store_path, &id, Status::Killed)?;
+            progress(&id, &format!("✗ failed: {}", first_line(&last_err)));
+            failed.push(id);
+            continue;
         }
 
         // Advance: mark the node done in the authoritative store.
@@ -159,13 +177,20 @@ fn first_line(s: &str) -> &str {
 /// projection, not authority — `kittenscrew spec render` resyncs it); the loop
 /// only needs the authoritative TOML advanced so `plan::next` returns the successor.
 pub(crate) fn mark_done(path: &Path, id: &str) -> Result<(), String> {
+    mark_status(path, id, Status::Done)
+}
+
+/// Set a node's status in the authoritative store. Used to advance a green node
+/// (Done) or to retire an unrecoverable one (Killed) so it leaves the ready
+/// frontier without halting the whole run (T86).
+pub(crate) fn mark_status(path: &Path, id: &str, status: Status) -> Result<(), String> {
     let mut s = Store::load(path).map_err(|e| e.to_string())?;
     let t = s
         .tasks
         .iter_mut()
         .find(|t| t.id == id)
         .ok_or_else(|| format!("unknown task {id}"))?;
-    t.status = Status::Done;
+    t.status = status;
     s.save(path).map_err(|e| e.to_string())
 }
 
@@ -247,6 +272,61 @@ mod tests {
         let out = drive(&driver, &opts, |_, _| {}).unwrap();
         assert!(matches!(out, Outcome::Converged { done: 1 }), "got {out:?}");
         assert_eq!(driver.n.load(Ordering::SeqCst), 2, "should have retried once");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T86: a node that never compiles must NOT abandon an INDEPENDENT ready node.
+    /// Node A (priority 1) always fails verify; node B (priority 2, no dep on A) is good.
+    /// OLD behaviour: drive() Halted at A with done=0 — B never attempted (this lost the
+    /// live A/B bench to the bare loop, -33pp). NEW: A is retired (Killed), B is driven
+    /// green → done=1, Outcome::Halted reports A failed but B still completed.
+    #[test]
+    fn t86_failed_node_does_not_abandon_independent_node() {
+        use crate::driver::api::{Driver, DriverError, Turn, TurnResult};
+
+        struct PartlyBroken;
+        impl Driver for PartlyBroken {
+            fn dispatch(&self, t: &Turn) -> Result<TurnResult, DriverError> {
+                let text = if t.prompt.contains("alpha") {
+                    "```rust\npub fn alpha() -> i64 { 1 + }\n```".to_string() // never compiles
+                } else {
+                    "```rust\npub fn beta() -> i64 { 2 }\n```".to_string() // good
+                };
+                Ok(TurnResult { text, model: "partly".into() })
+            }
+            fn model(&self) -> &str {
+                "partly"
+            }
+        }
+
+        let dir = std::env::temp_dir().join(format!("ks_t86_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store_path = dir.join("spec.toml");
+        let a = dir.join("a.rs");
+        let b = dir.join("b.rs");
+        std::fs::write(
+            &store_path,
+            format!(
+                "schema = 1\n\n\
+                 [[task]]\nid = \"A\"\nstatus = \"todo\"\ntask = \"alpha\"\ndeps = []\npriority = 1\nscope = [{:?}]\n\
+                 [[task]]\nid = \"B\"\nstatus = \"todo\"\ntask = \"beta\"\ndeps = []\npriority = 2\nscope = [{:?}]\n",
+                a.to_str().unwrap(),
+                b.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+
+        let opts = DriveOpts { max_iters: 10, max_retries: 1, store_path: store_path.clone() };
+        let out = drive(&PartlyBroken, &opts, |_, _| {}).unwrap();
+
+        match out {
+            Outcome::Halted { done, .. } => {
+                assert_eq!(done, 1, "independent node B must be driven green despite A failing")
+            }
+            other => panic!("expected Halted(A failed) with done=1, got {other:?}"),
+        }
+        assert!(verify::rustc_compiles(&b).ok, "B's file must compile");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

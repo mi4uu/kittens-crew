@@ -1480,7 +1480,7 @@ risk = 1
 
 [[task]]
 id = "T86"
-status = "todo"
+status = "done"
 task = "drive() halt-on-failure abandons INDEPENDENT ready nodes — real bug found by the live llama3.2 bench (harness scored -33pp vs bare). When a node fails verify after all retries, drive() returns Halted and STOPS the whole run, so independent downstream frontier nodes (no dep on the failed one) are never attempted — while the bare arm attempts every node independently and thus scores higher. The serial loop violates the blast-radius semantics we already designed in T78 events (frontier_blocked = ONLY transitive dependents, NOT global). Fix: on an unrecoverable node, mark it failed/blocked and CONTINUE to other ready nodes; block ONLY its transitive dependents (plan::impact blocks). drive_parallel (T77) has the same one-bad-node-kills-the-batch issue. This is the harness LOSING to bare by abandoning recoverable independent work — highest-priority correctness fix."
 deps = []
 priority = 1
