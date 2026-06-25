@@ -1131,7 +1131,7 @@ deps = ["T60"]
 priority = 2
 cites = ["§I"]
 scope = ["kittenscrew/src/driver/api.rs"]
-note = "rig ~0.37 (both gi-dellav projects use it; chosen to solve the 'which lib' problem). provider+model from [driver] config. Routing/repair/cache = a SEPARATE future server (CCR+failover is its embryo), not here."
+note = "rig ~0.37 chosen (mature ecosystem — awesome-rig confirms lots built on it). Use rig-core DIRECTLY behind the Driver trait (our trait IS the dyn-dispatch seam — skip rig-dyn @1★). taquba-research + coral-rs prove rig-behind-a-trait. Optional local/cheap tier: rig-llama-cpp (GGUF). Wire rig-tap early for drive-loop observability. provider+model from [driver] config. Routing/repair/cache = SEPARATE future server (CCR+failover embryo), not here."
 value = 5
 difficulty = 3
 risk = 3
@@ -1147,7 +1147,7 @@ cites = [
     "V27",
 ]
 scope = ["kittenscrew/src/driver/drive.rs"]
-note = "THE answer to 'we wait for the smart model': DAG drives, model fills leaves. Architecture (from ironclaw, the mature Rust reference): ONE canonical executor + a strategy-composed planner — context/compaction/model-pick/stop/budget/recovery/gate as swappable traits. Our T63(verify), T64(gate/tripwire), T66(input-drain/queues), T67(recovery/doomloop), T70(budget) ARE those strategies behind this executor + the T60 host-port. Moat vs pi/zerostack/caveman: an authoritative DAG none of them has."
+note = "THE answer to 'we wait for the smart model': DAG drives, model fills leaves. Architecture (from ironclaw): ONE canonical executor + strategy-composed planner — context/compaction/model-pick/stop/budget/recovery/gate as swappable traits; T63(verify),T64(gate),T66(input-drain),T67(recovery),T70(budget) ARE those strategies behind this executor + the T60 host-port. BUILD the topo ready-set scheduler ourselves; STEAL weavegraph's concurrency idioms (buffer_unordered frontier, barrier-merge, versioned state) + graph-flow's FanOutTask — do NOT adopt weavegraph as engine (its BSP/version-gated grain fights our authoritative ready-set DAG; harness must keep control). Moat: an authoritative DAG none of pi/zerostack/caveman has."
 value = 5
 difficulty = 4
 risk = 3
@@ -1164,7 +1164,7 @@ cites = [
     "V25",
 ]
 scope = ["kittenscrew/src/driver/verify.rs"]
-note = "Turns the existing check-done/variance gates into the loop's done-ness oracle. Wrap, don't reimplement."
+note = "Turns the existing check-done/variance gates into the loop's done-ness oracle. Wrap, don't reimplement. Steal taquba-research's idempotent/memoized durable-node model (run_id-keyed, crash-resumable, don't re-pay the LLM call); nika's reproducible execution traces for replay-verify."
 value = 5
 difficulty = 3
 risk = 2
@@ -1177,7 +1177,7 @@ deps = ["T62"]
 priority = 2
 cites = ["V33"]
 scope = ["kittenscrew/src/driver/tripwire.rs"]
-note = "User ask: yolo + config exceptions. Mechanism = PreToolUse-style block (pi/caveman), allow-by-default. Extends existing [guard] blocked_cmds + [gate]. Determinism via filter, not prompting."
+note = "User ask: yolo + config exceptions. Mechanism = PreToolUse-style block (pi/caveman), allow-by-default. Extends existing [guard] blocked_cmds + [gate]. Determinism via filter, not prompting. Gate references: nika's read-XOR-write capability-security model + Microsoft Agent Governance Toolkit (policy enforcement w/ native rig integration)."
 value = 5
 difficulty = 3
 risk = 3
@@ -1246,7 +1246,7 @@ deps = ["T62"]
 priority = 5
 cites = ["V34"]
 scope = ["kittenscrew/src/driver/checkpoint.rs"]
-note = "Stolen from caveman-code. Safety net for yolo mode alongside the tripwire gate."
+note = "Stolen from caveman-code. Safety net for yolo mode alongside the tripwire gate. Port taquba-research's idempotent durable-node execution (run_id-keyed memoization) for crash-resumable checkpoints."
 value = 4
 difficulty = 3
 risk = 2
