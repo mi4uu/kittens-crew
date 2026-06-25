@@ -30,9 +30,10 @@ pub(crate) fn run(cli: Cli) -> Result<(), KittenError> {
             parallel,
             yolo,
             budget,
+            rollback_on_fail,
             max_iters,
             max_retries,
-        } => run_cmd(driver, model, parallel, yolo, budget, max_iters, max_retries),
+        } => run_cmd(driver, model, parallel, yolo, budget, rollback_on_fail, max_iters, max_retries),
         Cmd::Bench {
             store,
             k,
@@ -383,6 +384,7 @@ fn run_cmd(
     parallel: bool,
     yolo: bool,
     budget: Option<u64>,
+    rollback_on_fail: bool,
     max_iters: u32,
     max_retries: u32,
 ) -> Result<(), KittenError> {
@@ -397,6 +399,15 @@ fn run_cmd(
         store_path: std::path::PathBuf::from(store::STORE_PATH),
         // Safe by default (T90): confine all scope writes to the project dir and below.
         workspace_root: Some(std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))),
+    };
+
+    // P1.5 safety net: snapshot the working tree before driving so a halted run can be undone.
+    let snap = if rollback_on_fail {
+        opts.workspace_root
+            .as_ref()
+            .and_then(|r| crate::driver::snapshot::snapshot(r).ok())
+    } else {
+        None
     };
 
     // YOLO (T64) and budget (T70) modules exist standalone; wiring their enforcement
@@ -452,6 +463,16 @@ fn run_cmd(
         }
     }
     .map_err(KittenError::Validation)?;
+
+    // P1.5: if the run halted and a snapshot was taken, restore the pre-run tree.
+    if let (Some(snap), Some(root)) = (&snap, opts.workspace_root.as_ref()) {
+        if matches!(outcome, Outcome::Halted { .. }) {
+            match crate::driver::snapshot::rollback(root, snap) {
+                Ok(()) => println!("{}", kitty::say(k, "run halted — rolled back to the pre-run snapshot")),
+                Err(e) => println!("{}", kitty::say(k, &format!("rollback failed: {e}"))),
+            }
+        }
+    }
 
     let msg = match outcome {
         Outcome::Converged { done } => {

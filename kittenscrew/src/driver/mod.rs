@@ -31,6 +31,7 @@ pub mod queue;
 pub mod response;
 pub mod scenario;
 pub mod sim;
+pub mod snapshot;
 pub mod status;
 pub mod tripwire;
 pub mod verify;

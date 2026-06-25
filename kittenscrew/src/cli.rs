@@ -53,6 +53,10 @@ pub enum Cmd {
         /// Rough token budget cap for the run (T70). Surfaced now; in-loop enforcement is pending.
         #[arg(long)]
         budget: Option<u64>,
+        /// Safety net (P1.5): snapshot the working tree before driving and roll back
+        /// (restore tracked files + remove the run's new files) if the run halts.
+        #[arg(long)]
+        rollback_on_fail: bool,
         /// Max nodes to drive before yielding (V34 hard bound).
         #[arg(long, default_value_t = 20)]
         max_iters: u32,
