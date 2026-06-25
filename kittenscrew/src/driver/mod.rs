@@ -35,6 +35,11 @@ pub mod status;
 pub mod tripwire;
 pub mod verify;
 
+/// End-to-end composition of the action-health layer (T79-T83) + the T84-glue
+/// prototype. Test-gated until T84 wires `simulate()`'s body into `drive()`.
+#[cfg(test)]
+mod karma_sim;
+
 use crate::config::DriverCfg;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
