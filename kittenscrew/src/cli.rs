@@ -45,6 +45,20 @@ pub enum Cmd {
         #[arg(long, default_value_t = 2)]
         max_retries: u32,
     },
+    /// A/B benchmark (T75): bare-baseline vs kittenscrew on the SAME model/store,
+    /// k trials each — reports the delta that is the harness's actual weight.
+    Bench {
+        /// Spec store to benchmark against (a small toy spec, NOT the live repo store).
+        #[arg(long)]
+        store: std::path::PathBuf,
+        /// Trials per arm (pass^k consistency). Each trial is a full model run.
+        #[arg(long, default_value_t = 3)]
+        k: u32,
+        #[arg(long, default_value_t = 20)]
+        max_iters: u32,
+        #[arg(long, default_value_t = 2)]
+        max_retries: u32,
+    },
     /// Hook orchestration (T5-T8). Reads JSON from stdin (Claude Code hook contract).
     Hook {
         /// Hook event: session-start | pre-tool | post-tool | pre-compact.

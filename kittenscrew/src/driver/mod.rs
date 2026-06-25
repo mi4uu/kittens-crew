@@ -14,6 +14,7 @@
 //! ClaudeCodeDriver embryo — re-exported so existing `crate::driver::*` callers
 //! (hook.rs) are unchanged.
 pub mod api;
+pub mod bench;
 pub mod drive;
 pub mod verify;
 

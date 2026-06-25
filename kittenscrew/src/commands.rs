@@ -25,6 +25,12 @@ pub(crate) fn run(cli: Cli) -> Result<(), KittenError> {
         Cmd::Check { action } => check_cmd(action),
         Cmd::Score => score_cmd(),
         Cmd::Run { max_iters, max_retries } => run_cmd(max_iters, max_retries),
+        Cmd::Bench {
+            store,
+            k,
+            max_iters,
+            max_retries,
+        } => bench_cmd(store, k, max_iters, max_retries),
         Cmd::Config { action } => config_cmd(action),
         Cmd::Compression { action } => compression_cmd(action),
         Cmd::Docs { action } => docs_cmd(action),
@@ -391,6 +397,51 @@ fn run_cmd(max_iters: u32, max_retries: u32) -> Result<(), KittenError> {
         }
     };
     println!("{}", kitty::say(k, &msg));
+    Ok(())
+}
+
+/// T75 — A/B benchmark: bare baseline vs kittenscrew on the same model/store, print
+/// the delta that is the harness's actual weight.
+fn bench_cmd(
+    store: std::path::PathBuf,
+    k: u32,
+    max_iters: u32,
+    max_retries: u32,
+) -> Result<(), KittenError> {
+    use crate::driver::api::HttpDriver;
+    use crate::driver::bench::{bench, BenchOpts};
+
+    let driver = HttpDriver::codestral()
+        .map_err(|e| KittenError::Validation(format!("driver: {e}")))?;
+    let rep = bench(
+        &driver,
+        &BenchOpts {
+            store_path: store,
+            k,
+            max_iters,
+            max_retries,
+        },
+    )
+    .map_err(KittenError::Validation)?;
+
+    let n = rep.nodes;
+    let yn = |b: bool| if b { "yes" } else { "no" };
+    let body = format!(
+        "A/B over {k} trial(s), {n} node(s) — same model (codestral), only the harness differs\n\
+         bare      : pass^1={:>3}  full-rate={:>3.0}%  mean-green={:.2}/{n}\n\
+         kittenscrw: pass^1={:>3}  full-rate={:>3.0}%  mean-green={:.2}/{n}\n\
+         DELTA     : full-rate {:+.0}pp   mean-green {:+.2}",
+        yn(rep.bare.pass_1()),
+        rep.bare.full_rate() * 100.0,
+        rep.bare.mean_green(),
+        yn(rep.harness.pass_1()),
+        rep.harness.full_rate() * 100.0,
+        rep.harness.mean_green(),
+        (rep.harness.full_rate() - rep.bare.full_rate()) * 100.0,
+        rep.harness.mean_green() - rep.bare.mean_green(),
+    );
+    let kit = kitty::lookup("builder").expect("builder kitty");
+    println!("{}", kitty::say(kit, &body));
     Ok(())
 }
 

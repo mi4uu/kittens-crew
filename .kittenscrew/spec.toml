@@ -1325,7 +1325,7 @@ risk = 5
 
 [[task]]
 id = "T75"
-status = "todo"
+status = "done"
 task = "A/B benchmark harness — measure kittenscrew's WEIGHT honestly: same model in a naive model-driven loop (baseline: pi_agent_rust) vs kittenscrew (DAG-driven), report the DELTA + pass^k (k=1..4). The thinnest proof IS this A/B, not a solo demo. Adopt: Terminal-Bench 2.0 (Harbor) primary, tau2-bench for pass^k consistency, SWE-bench Verified MINI subset, Aider polyglot subset as cheap regression baseline."
 deps = [
     "T62",

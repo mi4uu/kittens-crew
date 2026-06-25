@@ -108,7 +108,8 @@ pub fn drive(
 }
 
 /// The whole point: the model sees ONLY this leaf, never the global plan.
-fn scoped_prompt(task: &str, target: &Path) -> String {
+/// `pub(crate)` so the A/B bench (T75) gives both arms the identical prompt.
+pub(crate) fn scoped_prompt(task: &str, target: &Path) -> String {
     format!(
         "You are filling ONE leaf of a build plan. Do EXACTLY this node — nothing more, \
          no extra files, no scaffolding.\n\n\
@@ -138,7 +139,7 @@ fn repair_prompt(task: &str, target: &Path, err: &str) -> String {
 }
 
 /// Pull the first ```fenced``` block; fall back to the whole text if unfenced.
-fn extract_code(text: &str) -> String {
+pub(crate) fn extract_code(text: &str) -> String {
     if let Some(start) = text.find("```") {
         let after = &text[start + 3..];
         // Drop the opening fence's language tag line (e.g. "rust\n").
