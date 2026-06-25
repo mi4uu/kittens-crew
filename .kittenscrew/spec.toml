@@ -1285,7 +1285,7 @@ deps = []
 priority = 2
 cites = ["§I"]
 scope = ["kittenscrew/src/driver/estimate.rs"]
-note = "User: classic deterministic tools help understand the situation + plan. If you know what's to be done and roughly its scope, you can divide + parallelize the work. North-star aligned (offload deterministic work to Rust). Leverages existing per-task difficulty/risk/value fields."
+note = "User: classic deterministic tools help understand the situation + plan. If you know what's to be done and roughly its scope, you can divide + parallelize the work. North-star aligned (offload deterministic work to Rust). Leverages existing per-task difficulty/risk/value fields. CONCRETE ENGINE: tokensave (aovestdipaperino/tokensave) — single ~25MB Rust binary, 30+ langs via bundled tree-sitter, builds a symbol-level semantic code graph (functions/structs/call-edges/type-hierarchies + COMPLEXITY METRICS), exposed as MCP, 100% local. Use/port it as the estimator's understanding engine: per-symbol complexity + scope deterministically. Bonus: its whole purpose is killing the explore-spiral (agents burning tokens on grep/glob/Read + Explore subagents = exactly our bare-baseline failure) — so it doubles as the Explorer-Kitty leash."
 value = 5
 difficulty = 3
 risk = 2
