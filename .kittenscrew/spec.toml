@@ -1572,6 +1572,19 @@ value = 5
 difficulty = 2
 risk = 1
 
+[[task]]
+id = "T93"
+status = "todo"
+task = "Wise Kitty recall layer — BUILD MINIMAL NATIVE (research done 2026-06-25, 6-source sweep, UNANIMOUS: adopt none of the external engines — they all own their own store + are TS/daemon; build native). Keep STORE = canonical markdown-git + the MEMORY.md one-line pointer index (80% right already). ADD a thin Rust recall layer (~300-400 LOC): local embeddings via fastembed-rs (bge-small-en-v1.5 / all-MiniLM-L6-v2, 384d, ONNX, LOCAL no-cloud) + a vector index (rig InMemoryVectorStore — ALREADY a dep — + serde snapshot for v1; sqlite-vec sidecar only if startup re-embed hurts) + FTS5/BM25 keyword, fused via RRF. WRITE: embed each note (description + first chunk) on save into a GITIGNORED sidecar (.kittenscrew/memory.db) — a DERIVED index, markdown-git stays the single source of truth. RECALL: embed query -> KNN top-K + keyword -> return note paths -> load ONLY those .md (no context flooding). DEFER: consolidation (episodic->semantic) + decay (timestamps + manual curation for now). New dep surface = ONE crate (fastembed). Orthogonal to squeez (session episodic recall) — compose, do not bridge."
+deps = []
+priority = 4
+cites = []
+scope = ["kittenscrew/src/memory.rs"]
+note = "Wise Kitty (the Memory role) made concrete. Letta benchmark warning: plain filesystem beat vector libs on LoCoMo (74%) — so semantic recall is the ONE upgrade, NOT a knowledge-graph/consolidation system. Mine patterns from episodic-memory/cavemem/lean-ctx (all converge on fastembed+sqlite-vec+FTS5) but dep on none. Closes the RAG item on routing-server-future-component."
+value = 4
+difficulty = 3
+risk = 2
+
 [[bug]]
 id = "B1"
 date = "2026-06-24"
