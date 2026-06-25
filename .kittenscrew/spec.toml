@@ -1131,7 +1131,7 @@ deps = ["T60"]
 priority = 2
 cites = ["§I"]
 scope = ["kittenscrew/src/driver/api.rs"]
-note = "rig ~0.37 chosen (mature ecosystem — awesome-rig confirms lots built on it). Use rig-core DIRECTLY behind the Driver trait (our trait IS the dyn-dispatch seam — skip rig-dyn @1★). taquba-research + coral-rs prove rig-behind-a-trait. Optional local/cheap tier: rig-llama-cpp (GGUF). Wire rig-tap early for drive-loop observability. provider+model from [driver] config. Routing/repair/cache = SEPARATE future server (CCR+failover embryo), not here."
+note = "rig ~0.37 chosen (mature ecosystem — awesome-rig confirms lots built on it). Use rig-core DIRECTLY behind the Driver trait (our trait IS the dyn-dispatch seam — skip rig-dyn @1★). taquba-research + coral-rs prove rig-behind-a-trait. Optional local/cheap tier: rig-llama-cpp (GGUF). Wire rig-tap early for observability. provider+model from [driver] config. Routing/repair/cache = SEPARATE future server (CCR+failover embryo), not here. PORT from opencrabs (user's own code): brain/provider/ trait+factory+fallback — reuse the multi-provider + fallback layer directly (it predates the rig choice; reconcile or wrap)."
 value = 5
 difficulty = 3
 risk = 3
@@ -1147,7 +1147,7 @@ cites = [
     "V27",
 ]
 scope = ["kittenscrew/src/driver/drive.rs"]
-note = "THE answer to 'we wait for the smart model': DAG drives, model fills leaves. Architecture (from ironclaw): ONE canonical executor + strategy-composed planner — context/compaction/model-pick/stop/budget/recovery/gate as swappable traits; T63(verify),T64(gate),T66(input-drain),T67(recovery),T70(budget) ARE those strategies behind this executor + the T60 host-port. BUILD the topo ready-set scheduler ourselves; STEAL weavegraph's concurrency idioms (buffer_unordered frontier, barrier-merge, versioned state) + graph-flow's FanOutTask — do NOT adopt weavegraph as engine (its BSP/version-gated grain fights our authoritative ready-set DAG; harness must keep control). Moat: an authoritative DAG none of pi/zerostack/caveman has."
+note = "THE answer to 'we wait for the smart model': DAG drives, model fills leaves. Architecture (ironclaw): ONE canonical executor + strategy-composed planner — context/compaction/model-pick/stop/budget/recovery/gate as swappable traits; T63/T64/T66/T67/T70 ARE those strategies behind it + the T60 host-port. BUILD the topo ready-set scheduler ourselves; STEAL weavegraph idioms (buffer_unordered frontier, barrier-merge, versioned state) + graph-flow FanOutTask — do NOT adopt weavegraph (BSP/version-gated grain fights our ready-set DAG). opencrabs (user's own) has only an ADVISORY plan-DAG (services/plan.rs, plan_tool.rs) the MODEL optionally calls — readiness computed but model decides to advance; conversation-driven tool_loop.rs. kittenscrew INVERTS this (harness advances). Port the plan schema as a data-model start; the DAG-drives-the-model executor is NET-NEW = the differentiator even vs the user's own mature agent. Moat: authoritative DAG none of pi/zerostack/caveman/opencrabs has."
 value = 5
 difficulty = 4
 risk = 3
@@ -1220,7 +1220,7 @@ deps = ["T62"]
 priority = 5
 cites = ["V34"]
 scope = ["kittenscrew/src/driver/doomloop.rs"]
-note = "Stolen from zerostack/multistack. Pairs with the research-budget-governor idea (Explorer Kitty leash)."
+note = "Stolen from zerostack/multistack. Pairs with the research-budget-governor idea (Explorer Kitty leash). PORT opencrabs service/phantom.rs (is_stuck_in_intent_loop — semantic doom-loop + iteration cap); already built and working, reuse directly."
 value = 3
 difficulty = 2
 risk = 1
@@ -1259,7 +1259,7 @@ deps = ["T62"]
 priority = 5
 cites = ["V34"]
 scope = ["kittenscrew/src/driver/budget.rs"]
-note = "Stolen from caveman-code (money as control signal). Wrap squeez token-track, never reimplement. Limits are ROUGH, not rigorous (user): approximate token/iteration/page caps whose job is twofold — (1) bound runaway work (the infinite-research spiral observed on bare Sonnet), (2) let the planner SELECT which elements fit within the envelope. A rough limit that SHAPES selection beats a precise limit that only kills. Pairs with T64 tripwire + the Explorer-Kitty research leash."
+note = "Stolen from caveman-code (money as control signal). Wrap squeez token-track, never reimplement. Limits are ROUGH not rigorous (user): approximate token/iteration/page caps whose job is twofold — bound runaway work (the infinite-research spiral) AND let the planner SELECT what fits the envelope. PORT opencrabs cost-ledger + pricing table (db/repository/usage_ledger.rs) as the basis — BUT opencrabs only LOGS cost; T70 must ADD the deny/block enforcement path. Pairs with T64 tripwire + Explorer-Kitty leash."
 value = 3
 difficulty = 2
 risk = 2
