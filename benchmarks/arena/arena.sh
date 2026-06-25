@@ -39,6 +39,9 @@ PROMPT_DEFAULT="$HERE/prompt.txt"        # the one sloppy brief, identical for a
 IDLE_SECS="${ARENA_IDLE:-60}"            # pane unchanged this long ⇒ agent done/waiting
 MAX_SECS="${ARENA_MAX:-2400}"            # hard equal budget per arm (40 min default)
 POLL_SECS="${ARENA_POLL:-10}"            # how often run polls the pane
+SYSPROMPT="${ARENA_SYSPROMPT:-0}"        # 1 ⇒ also force the per-arm guide into the
+                                         # system prompt (--append-system-prompt-file),
+                                         # for when a weak model ignores CLAUDE.md
 
 cname() { echo "arena-$1"; }
 need_env() { [ -f "$ENV_FILE" ] || { echo "missing $ENV_FILE (copy .env.example)"; exit 1; }; }
@@ -101,12 +104,15 @@ cmd_up() {
   rm -rf "$STATE/$arm"; mkdir -p "$work" "$cdir"
   seed_auth "$cdir"                      # same token, every arm; nothing else
   cp -r "$project/." "$work/"            # each arm mutates its OWN copy
-  # Skill arms get the generic, identical "use your skillset" nudge (counters the
-  # model's default-solve-alone). Baseline gets none — it has no skillset. The
-  # nudge names no skill + tunes no outcome, so it doesn't juice any one arm.
+  # Each skill arm gets its OWN small guide (guides/<arm>.md): what commands/skills
+  # it ships, what they do, when + in what order — transcribed from that skillset's
+  # OWN docs, same structure/length for every arm, so it's equal treatment not a
+  # juiced advantage. A real plugin being installed ≠ a weak model reaching for it;
+  # the guide bridges that. Baseline gets none — it has no skillset to use.
   case "$arm" in
     baseline) : ;;
-    *) cp "$HERE/CLAUDE.skillarm.md" "$cdir/CLAUDE.md" ;;  # ~/.claude scope, keeps /work clean
+    *) [ -f "$HERE/guides/$arm.md" ] && cp "$HERE/guides/$arm.md" "$cdir/CLAUDE.md" \
+         || echo "  WARN: no guides/$arm.md — arm runs without a usage guide" ;;
   esac
   docker rm -f "$c" >/dev/null 2>&1 || true
   # Baseline never sees /repo → it cannot pick up any of our tooling.
@@ -124,9 +130,16 @@ cmd_up() {
 {"hasCompletedOnboarding":true,"lastOnboardingVersion":"2.1.160","theme":"dark","hasCompletedClaudeInChromeOnboarding":true}
 JSON'
   date +%s > "$STATE/$arm/started_at"   # wall-time clock (rubric: time spent)
+  # Fallback for a model that ignores CLAUDE.md: force the SAME per-arm guide into
+  # the system prompt. The guide is already mounted at /root/.claude/CLAUDE.md.
+  local append=""
+  if [ "$SYSPROMPT" = 1 ] && [ "$arm" != baseline ] && [ -f "$cdir/CLAUDE.md" ]; then
+    append="--append-system-prompt-file /root/.claude/CLAUDE.md"
+    echo "  sysprompt: forcing guides/$arm.md into the system prompt"
+  fi
   # start claude INTERACTIVELY in a detached tmux session.
   docker exec -d "$c" tmux new-session -d -s "$SESSION" -x 220 -y 50 \
-    "cd /work && claude --model $MODEL --dangerously-skip-permissions; exec bash"
+    "cd /work && claude --model $MODEL $append --dangerously-skip-permissions; exec bash"
   # First-launch dialogs (theme is pre-seeded away): trust-folder → Enter;
   # bypass-permissions warning → Down, Enter. Deterministic on first run; an
   # empty Enter on the main prompt is harmless if a dialog isn't shown.
