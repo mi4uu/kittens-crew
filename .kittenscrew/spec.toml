@@ -1118,7 +1118,7 @@ deps = []
 priority = 1
 cites = ["§I"]
 scope = ["kittenscrew/src/driver/mod.rs"]
-note = "Foundation of the standalone-harness pivot: kittenscrew DRIVES the model instead of waiting for it. Backends: ApiDriver(rig) first, ClaudeCodeDriver(tmux) later."
+note = "Foundation of the standalone-harness pivot: kittenscrew DRIVES the model instead of waiting. = ironclaw's AgentLoopDriverHost port — the loop core reaches model/tools ONLY through this trait, so the deterministic invariant-checking core stays pure/testable. Backends: ApiDriver(rig) first, ClaudeCodeDriver(tmux) later."
 value = 5
 difficulty = 2
 risk = 2
@@ -1147,7 +1147,7 @@ cites = [
     "V27",
 ]
 scope = ["kittenscrew/src/driver/drive.rs"]
-note = "THE answer to 'we wait for the smart model': DAG drives, model fills leaves. Evolution of the existing `hook stop` autonomous driver into a real harness. Moat vs pi/zerostack/caveman — none has an authoritative DAG."
+note = "THE answer to 'we wait for the smart model': DAG drives, model fills leaves. Architecture (from ironclaw, the mature Rust reference): ONE canonical executor + a strategy-composed planner — context/compaction/model-pick/stop/budget/recovery/gate as swappable traits. Our T63(verify), T64(gate/tripwire), T66(input-drain/queues), T67(recovery/doomloop), T70(budget) ARE those strategies behind this executor + the T60 host-port. Moat vs pi/zerostack/caveman: an authoritative DAG none of them has."
 value = 5
 difficulty = 4
 risk = 3
