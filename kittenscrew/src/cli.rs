@@ -38,6 +38,10 @@ pub enum Cmd {
     /// leaf, dispatches a scoped prompt to a Driver, verifies it compiles (T63),
     /// and advances. The harness drives; the model only fills leaves.
     Run {
+        /// Spec store to drive (default: the project's .kittenscrew/spec.toml). Point at
+        /// a toy spec to experiment on the side without touching the real store.
+        #[arg(long)]
+        store: Option<std::path::PathBuf>,
         /// Backend: `api` (rig/HTTP, default) | `claude-code` (tmux, T71 — not built yet).
         #[arg(long, default_value = "api")]
         driver: String,

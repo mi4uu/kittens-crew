@@ -25,6 +25,7 @@ pub(crate) fn run(cli: Cli) -> Result<(), KittenError> {
         Cmd::Check { action } => check_cmd(action),
         Cmd::Score => score_cmd(),
         Cmd::Run {
+            store,
             driver,
             model,
             parallel,
@@ -33,7 +34,7 @@ pub(crate) fn run(cli: Cli) -> Result<(), KittenError> {
             rollback_on_fail,
             max_iters,
             max_retries,
-        } => run_cmd(driver, model, parallel, yolo, budget, rollback_on_fail, max_iters, max_retries),
+        } => run_cmd(store, driver, model, parallel, yolo, budget, rollback_on_fail, max_iters, max_retries),
         Cmd::Bench {
             store,
             k,
@@ -379,6 +380,7 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
 /// budget, driver selection — is the rest of T65/T64/T70).
 #[allow(clippy::too_many_arguments)]
 fn run_cmd(
+    store: Option<std::path::PathBuf>,
     driver: String,
     model: Option<String>,
     parallel: bool,
@@ -396,7 +398,7 @@ fn run_cmd(
     let opts = DriveOpts {
         max_iters,
         max_retries,
-        store_path: std::path::PathBuf::from(store::STORE_PATH),
+        store_path: store.unwrap_or_else(|| std::path::PathBuf::from(store::STORE_PATH)),
         // Safe by default (T90): confine all scope writes to the project dir and below.
         workspace_root: Some(std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))),
     };
@@ -421,9 +423,27 @@ fn run_cmd(
     }
 
     // Serial (T62) vs scope-disjoint parallel (T77), generic over the concrete Driver.
+    // Each advanced node is both narrated to the user AND appended as a liveness event
+    // (T68) to `.kittenscrew/events.jsonl` — the one-line-per-event feed the fzf TUI
+    // (T89) tails. Watch a live run with:
+    //   tail -f .kittenscrew/events.jsonl | fzf --tail=1000 --preview 'echo {}'
     fn go<D: Driver + Sync>(d: &D, opts: &DriveOpts, parallel: bool, k: &kitty::Kitty) -> Result<Outcome, String> {
+        use crate::driver::status::{Heartbeat, Liveness, Reporter};
         let prog = |id: &str, model: &str| {
-            println!("{}", kitty::say(k, &format!("{id} → done ({model})")));
+            println!("{}", kitty::say(k, &format!("{id} → {model}")));
+            // A "✗ "-prefixed model slot is a failed/blocked node (drive() convention).
+            let (status, detail) = if model.starts_with('✗') {
+                (Liveness::Blocked, model.to_string())
+            } else {
+                (Liveness::Done, format!("done ({model})"))
+            };
+            if let Ok(f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(".kittenscrew/events.jsonl")
+            {
+                let _ = Reporter::new(f).report(&Heartbeat { status, node: id.to_string(), detail });
+            }
         };
         if parallel {
             drive_parallel(d, opts, prog)
