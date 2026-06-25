@@ -42,6 +42,10 @@ POLL_SECS="${ARENA_POLL:-10}"            # how often run polls the pane
 SYSPROMPT="${ARENA_SYSPROMPT:-0}"        # 1 ⇒ also force the per-arm guide into the
                                          # system prompt (--append-system-prompt-file),
                                          # for when a weak model ignores CLAUDE.md
+EFFORT="${ARENA_EFFORT:-low}"            # session effort level. Low + MAX_THINKING_TOKENS=0
+                                         # shrinks the beta-flag surface (interleaved-thinking
+                                         # / effort) that buggy reseller proxies inject and
+                                         # corrupt. Uniform across arms ⇒ fair condition.
 
 cname() { echo "arena-$1"; }
 need_env() { [ -f "$ENV_FILE" ] || { echo "missing $ENV_FILE (copy .env.example)"; exit 1; }; }
@@ -145,7 +149,7 @@ JSON'
   fi
   # start claude INTERACTIVELY in a detached tmux session.
   docker exec -d "$c" tmux new-session -d -s "$SESSION" -x 220 -y 50 \
-    "cd /work && claude --model $MODEL $append --dangerously-skip-permissions; exec bash"
+    "cd /work && claude --model $MODEL --effort $EFFORT $append --dangerously-skip-permissions; exec bash"
   # First-launch dialogs (theme is pre-seeded away): trust-folder → Enter;
   # bypass-permissions warning → Down, Enter. Deterministic on first run; an
   # empty Enter on the main prompt is harmless if a dialog isn't shown.
