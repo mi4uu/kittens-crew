@@ -1541,10 +1541,23 @@ deps = ["T86"]
 priority = 1
 cites = []
 scope = ["kittenscrew/src/driver/drive.rs"]
-note = "User MVP cut 2026-06-25. Reorders the roadmap: the SAFETY subset (tripwire/doomloop/budget + default project-dir sandbox) is MVP-critical and comes BEFORE the karma/intervention intelligence (T84). Ship safe+usable, iterate in real use, add tools incrementally. The default sandbox (project dir + below, nothing above) is a hard security default, not optional."
+note = "User MVP cut 2026-06-25. Safety subset (sandbox + runaway filter) comes BEFORE the karma/intervention intelligence (T84). SANDBOX DESIGN — validated by the 10-source research sweep (memory research-harness-landscape), the field CONVERGES on exactly our direction: (1) OS-LEVEL enforcement, not policy-only string checks (opencode proves policy-only is insufficient) — use nono (wraps macOS Seatbelt / Linux Landlock+seccomp+bubblewrap); (2) writable_roots = PROJECT DIR ONLY, network BLOCKED by default (stricter than Codex which leaves net open); (3) CIRCUIT BREAKER (from Codex): 3 consecutive sandbox denials => abort turn — cheap loop-prevention at the boundary, no LLM; (4) 3-POLICY enum untrusted|on-request|never, on-request = MVP default; (5) BASH ARITY-AWARE matching (CodeWhale execpolicy/bash_arity.rs ~200 LOC MIT): strip flags, count positional tokens, dict of tools so git status -s passes but git push does not — solves the prefix-gaming a naive string-tripwire (T64) cannot; (6) bubblewrap flag-set + KEEP CARGO_HOME/RUSTUP_HOME/SSH_AUTH_SOCK (zerostack) if rolling bwrap directly. The default sandbox (project dir + below, net blocked) is a HARD security default. Tool seam + verify-per-task: see T91 + verify.sh-per-task idea (each task carries its own done-predicate)."
 value = 5
 difficulty = 3
 risk = 3
+
+[[task]]
+id = "T91"
+status = "todo"
+task = "Agent competence/skills architecture + tool seam (user wants to base it on asimov.rs; research-refined 2026-06-25). MINE asimov.rs (do NOT dep — its RDF/SPARQL bus is too heavy; Unlicense so copy freely): (a) the closed 12-PROGRAM-PATTERN taxonomy (Adapter/Cataloger/Compiler/Emitter/Fetcher/Indexer/Prompter/Reader/Reasoner/Resolver/Runner/Writer) as kittenscrews coarse COMPETENCE-ROUTING vocabulary — route who-to-ask WITHOUT an LLM; (b) the MANIFEST shape (provides.programs + handles.{url_protocols,content_types} + requires.models) as the Agent-Card capability declaration; (c) a FILESYSTEM registry (scan dir + JSON manifests + symlink enable/disable, no daemon); (d) the Executor (libexec-first, PATH fallback, kill_on_drop, ~50 LOC). TOOL SEAM from pi(nktkt/pi)+opencode: an AgentTool trait (name/description/params/requires_permission/execute) as Arc<dyn> in a typed registry + an AgentEvent channel separating loop from UI; opencodes two-tier registry + stale-call identity token (return Stale-tool-call if the registration changed). PERMISSIONS: universal 3-tier Allow/Allow-for-Session/Deny, last-match-wins, deny-all default, ask suspends. Refines competence-routing-anti-stall. Deferred past the MVP (T90)."
+deps = []
+priority = 5
+cites = []
+scope = ["kittenscrew/src/skills.rs"]
+note = "Research-derived 2026-06-25 (memory research-harness-landscape). The asimov 12-pattern taxonomy is the single most portable idea — gives competence routing a principled vocabulary. Mine the taxonomy+manifest+registry+executor, NOT the RDF crates."
+value = 4
+difficulty = 3
+risk = 2
 
 [[bug]]
 id = "B1"
