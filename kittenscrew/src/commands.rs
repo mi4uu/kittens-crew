@@ -24,7 +24,7 @@ pub(crate) fn run(cli: Cli) -> Result<(), KittenError> {
         Cmd::Plan { action } => plan_cmd(action),
         Cmd::Check { action } => check_cmd(action),
         Cmd::Score => score_cmd(),
-        Cmd::Run { max_iters } => run_cmd(max_iters),
+        Cmd::Run { max_iters, max_retries } => run_cmd(max_iters, max_retries),
         Cmd::Config { action } => config_cmd(action),
         Cmd::Compression { action } => compression_cmd(action),
         Cmd::Docs { action } => docs_cmd(action),
@@ -362,7 +362,7 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
 /// T62/T65 — drive the DAG: fill ready code leaves via Codestral, verify each
 /// compiles, advance. Minimal front door for the harness (full flag surface — yolo,
 /// budget, driver selection — is the rest of T65/T64/T70).
-fn run_cmd(max_iters: u32) -> Result<(), KittenError> {
+fn run_cmd(max_iters: u32, max_retries: u32) -> Result<(), KittenError> {
     use crate::driver::api::HttpDriver;
     use crate::driver::drive::{drive, DriveOpts, Outcome};
 
@@ -371,6 +371,7 @@ fn run_cmd(max_iters: u32) -> Result<(), KittenError> {
     let k = kitty::lookup("builder").expect("builder kitty");
     let opts = DriveOpts {
         max_iters,
+        max_retries,
         store_path: std::path::PathBuf::from(store::STORE_PATH),
     };
     let outcome = drive(&driver, &opts, |id, model| {

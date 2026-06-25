@@ -1309,7 +1309,7 @@ risk = 3
 
 [[task]]
 id = "T74"
-status = "todo"
+status = "done"
 task = "Bounded replan / recovery escalation — when a node's verify (T63) fails or execution diverges from plan: retry -> local-patch (re-dispatch the node with the failure output) -> full replan (planner re-derives only the affected subgraph; graph stays version-immutable). A FIRST-CLASS loop primitive, not buried in T62. This is the static-DAG's answer to plan-brittleness."
 deps = [
     "T62",

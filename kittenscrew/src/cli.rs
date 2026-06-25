@@ -41,6 +41,9 @@ pub enum Cmd {
         /// Max nodes to drive before yielding (V34 hard bound).
         #[arg(long, default_value_t = 20)]
         max_iters: u32,
+        /// Bounded replan (T74): retries per node, feeding the rustc error back.
+        #[arg(long, default_value_t = 2)]
+        max_retries: u32,
     },
     /// Hook orchestration (T5-T8). Reads JSON from stdin (Claude Code hook contract).
     Hook {
