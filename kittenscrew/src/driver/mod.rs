@@ -17,8 +17,11 @@ pub mod api;
 pub mod bench;
 pub mod delegation;
 pub mod drive;
+pub mod events;
+pub mod modelpick;
 pub mod scenario;
 pub mod sim;
+pub mod tripwire;
 pub mod verify;
 
 use crate::config::DriverCfg;

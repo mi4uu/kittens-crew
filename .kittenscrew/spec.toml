@@ -1171,7 +1171,7 @@ risk = 2
 
 [[task]]
 id = "T64"
-status = "todo"
+status = "done"
 task = "Tripwire gate — YOLO by default (no per-tool dialogs) with a config negative filter catching actions that 'don't look right / overreached': path-escape outside workspace, rm/delete, secret-touch, oversized diff, network egress, git push --force. Per-tripwire action: block | ask | flag+snapshot."
 deps = ["T62"]
 priority = 2
@@ -1292,7 +1292,7 @@ risk = 2
 
 [[task]]
 id = "T73"
-status = "todo"
+status = "done"
 task = "Model right-sizing strategy — the planner's ModelStrategy picks small <-> large model per node from the deterministic estimate (T72) + stored difficulty/risk/value: small/cheap model for low-scope leaf nodes, large model for high-difficulty/high-risk ones. Harness small AND large models by UNDERSTOOD scope, not by guess."
 deps = [
     "T72",
@@ -1367,7 +1367,7 @@ risk = 3
 
 [[task]]
 id = "T78"
-status = "todo"
+status = "done"
 task = "Progress monitoring + event/trigger engine — after each task (post-mark-done hook) evaluate triggers and surface state. Events: regression, blocking (blast-radius / frontier_blocked, NOT global count), slow_task (over-estimate AND no-progress/doom-loop), stall (the WORST, always escalates), significant_change (group fan-in gate), user_feedback (+ repeated_correction meta), missing_verify, criterion_tampering. Severity = deterministic f(base x blast_radius x value/risk), banded. Triggers from 3 sources: reactive(event) | cadence(every-N-tasks, mode report|approve) | milestone(gate). Every escalation carries deadline + fallback (no owner-stall). Surface = one-line items + preview (fzf-style), report vs report&ask."
 deps = [
     "T62",
