@@ -1125,7 +1125,7 @@ risk = 2
 
 [[task]]
 id = "T61"
-status = "todo"
+status = "done"
 task = "ApiDriver via the `rig` crate — multi-provider API backend (OpenRouter/Anthropic/local). Primary backend for the standalone harness; API-direct made affordable by mixing/routing providers."
 deps = ["T60"]
 priority = 2

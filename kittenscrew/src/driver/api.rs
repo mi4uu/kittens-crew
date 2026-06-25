@@ -28,6 +28,8 @@ pub enum DriverError {
     MissingKey(String),
     #[error("http: {0}")]
     Http(String),
+    #[error("provider error: {0}")]
+    Provider(String),
     #[error("model returned no text content")]
     Empty,
 }
@@ -93,6 +95,102 @@ impl Driver for HttpDriver {
     }
 }
 
+/// T61 — multi-provider backend built on the `rig` crate (rig-core), which speaks
+/// many LLM APIs behind one client. `rig` is async; our `Driver` seam is sync and
+/// must STAY sync (changing it would ripple through drive.rs/delegation.rs/
+/// scenario.rs and every caller). So the async is fully contained here: the struct
+/// owns a tokio runtime and `block_on`s the rig call inside the sync `dispatch`.
+///
+/// Targets any OpenAI-compatible `/chat/completions` endpoint (codestral,
+/// openrouter, groq, local llamafile, …) via rig's OpenAI Completions client with a
+/// configurable `base_url`. Provider/model/key come from `[driver]` config or the
+/// constructor; the key is read from an env var (never hardcoded, per security
+/// rules — fail fast if absent).
+pub struct RigDriver {
+    runtime: tokio::runtime::Runtime,
+    client: rig_core::providers::openai::CompletionsClient,
+    model: String,
+}
+
+impl RigDriver {
+    /// Build a driver against an OpenAI-compatible endpoint.
+    /// - `base_url`: provider endpoint up to (not including) `/chat/completions`,
+    ///   e.g. `https://codestral.mistral.ai/v1`. `None` → rig's default (OpenAI).
+    /// - `model`: the model id to ask for.
+    /// - `api_key`: the bearer key (already resolved from env by the caller).
+    pub fn new(
+        base_url: Option<&str>,
+        model: impl Into<String>,
+        api_key: &str,
+    ) -> Result<Self, DriverError> {
+        let mut builder =
+            rig_core::providers::openai::CompletionsClient::builder().api_key(api_key);
+        if let Some(base) = base_url {
+            builder = builder.base_url(base);
+        }
+        let client = builder
+            .build()
+            .map_err(|e| DriverError::Provider(format!("client build: {e}")))?;
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| DriverError::Provider(format!("tokio runtime: {e}")))?;
+        Ok(RigDriver {
+            runtime,
+            client,
+            model: model.into(),
+        })
+    }
+
+    /// Construct from `provider`/`model` + the key env var, the way
+    /// `HttpDriver::codestral()` reads `CODESTRAL_API_KEY`. `base_url` and the
+    /// env var name are threaded through so any OpenAI-compatible provider works.
+    pub fn from_env(
+        base_url: Option<&str>,
+        model: impl Into<String>,
+        key_env: &str,
+    ) -> Result<Self, DriverError> {
+        let api_key =
+            std::env::var(key_env).map_err(|_| DriverError::MissingKey(key_env.into()))?;
+        Self::new(base_url, model, &api_key)
+    }
+
+    /// Codestral via rig, for parity with `HttpDriver::codestral()` (same model,
+    /// same key env, but through the multi-provider rig client).
+    pub fn codestral() -> Result<Self, DriverError> {
+        Self::from_env(
+            Some("https://codestral.mistral.ai/v1"),
+            "codestral-latest",
+            "CODESTRAL_API_KEY",
+        )
+    }
+}
+
+impl Driver for RigDriver {
+    fn dispatch(&self, turn: &Turn) -> Result<TurnResult, DriverError> {
+        use rig_core::client::CompletionClient;
+        use rig_core::completion::Prompt;
+
+        let agent = self.client.agent(&self.model).build();
+        let prompt = turn.prompt.clone();
+        let text = self
+            .runtime
+            .block_on(async move { agent.prompt(prompt).await })
+            .map_err(|e| DriverError::Provider(e.to_string()))?;
+        if text.trim().is_empty() {
+            return Err(DriverError::Empty);
+        }
+        Ok(TurnResult {
+            text,
+            model: self.model.clone(),
+        })
+    }
+
+    fn model(&self) -> &str {
+        &self.model
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,6 +234,30 @@ mod tests {
     #[ignore]
     fn codestral_smoke_returns_rust() {
         let d = HttpDriver::codestral().expect("CODESTRAL_API_KEY set");
+        let r = d
+            .dispatch(&Turn {
+                prompt: "Write a Rust fn add(a:i64,b:i64)->i64. Only a fenced code block.".into(),
+            })
+            .expect("dispatch");
+        assert!(r.text.contains("fn add"), "got: {}", r.text);
+    }
+
+    #[test]
+    fn rig_codestral_without_key_is_missing_key_err() {
+        if std::env::var("CODESTRAL_API_KEY").is_err() {
+            assert!(matches!(
+                RigDriver::codestral(),
+                Err(DriverError::MissingKey(_))
+            ));
+        }
+    }
+
+    /// Real network smoke test against a provider through rig. Run manually:
+    ///   CODESTRAL_API_KEY=... cargo test -- --ignored rig_codestral_smoke
+    #[test]
+    #[ignore]
+    fn rig_codestral_smoke_returns_rust() {
+        let d = RigDriver::codestral().expect("CODESTRAL_API_KEY set");
         let r = d
             .dispatch(&Turn {
                 prompt: "Write a Rust fn add(a:i64,b:i64)->i64. Only a fenced code block.".into(),
