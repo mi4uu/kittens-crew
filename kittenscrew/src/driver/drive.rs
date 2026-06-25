@@ -158,7 +158,7 @@ fn first_line(s: &str) -> &str {
 /// Mark a node done in the store. ponytail: skips the SPEC.md re-render (that's a
 /// projection, not authority — `kittenscrew spec render` resyncs it); the loop
 /// only needs the authoritative TOML advanced so `plan::next` returns the successor.
-fn mark_done(path: &Path, id: &str) -> Result<(), String> {
+pub(crate) fn mark_done(path: &Path, id: &str) -> Result<(), String> {
     let mut s = Store::load(path).map_err(|e| e.to_string())?;
     let t = s
         .tasks

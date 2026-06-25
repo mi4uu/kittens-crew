@@ -15,6 +15,7 @@
 //! (hook.rs) are unchanged.
 pub mod api;
 pub mod bench;
+pub mod delegation;
 pub mod drive;
 pub mod scenario;
 pub mod sim;
