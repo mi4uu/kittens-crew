@@ -15,12 +15,18 @@
 //! (hook.rs) are unchanged.
 pub mod api;
 pub mod bench;
+pub mod budget;
+pub mod checkpoint;
 pub mod delegation;
+pub mod doomloop;
 pub mod drive;
+pub mod estimate;
 pub mod events;
 pub mod modelpick;
+pub mod queue;
 pub mod scenario;
 pub mod sim;
+pub mod status;
 pub mod tripwire;
 pub mod verify;
 

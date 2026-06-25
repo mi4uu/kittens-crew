@@ -1201,7 +1201,7 @@ risk = 2
 
 [[task]]
 id = "T66"
-status = "todo"
+status = "done"
 task = "Steer + follow-up injection queues — two distinct points: steer (mid-run, before next turn) vs follow-up (post-stop re-arm). Drain modes (one-at-a-time | drain-all). Operator interrupt/redirect without restarting."
 deps = ["T62"]
 priority = 5
@@ -1214,7 +1214,7 @@ risk = 1
 
 [[task]]
 id = "T67"
-status = "todo"
+status = "done"
 task = "Doom-loop guard — deterministically block a repeated identical tool call / dispatch, independent of model state. Prevents the spin seen on the bare baseline."
 deps = ["T62"]
 priority = 5
@@ -1227,7 +1227,7 @@ risk = 1
 
 [[task]]
 id = "T68"
-status = "todo"
+status = "done"
 task = "Status-socket liveness — the driver self-reports start/stop/blocked/done over a unix socket instead of parsing tmux scrollback. Robust out-of-band liveness for the loop + any supervisor."
 deps = ["T62"]
 priority = 5
@@ -1240,7 +1240,7 @@ risk = 1
 
 [[task]]
 id = "T69"
-status = "todo"
+status = "done"
 task = "Coupled checkpoint + rollback — snapshot code (shadow-git) AND loop/conversation state together per node; `rollback N` reverts both. A bad turn becomes fully undoable."
 deps = ["T62"]
 priority = 5
@@ -1253,7 +1253,7 @@ risk = 2
 
 [[task]]
 id = "T70"
-status = "todo"
+status = "done"
 task = "Budget as a loop primitive — track token/$ spend per loop and per node; a first-class termination condition and a cheap/expensive model-routing signal. WRAP squeez token-track, do not reimplement."
 deps = ["T62"]
 priority = 5
@@ -1279,7 +1279,7 @@ risk = 3
 
 [[task]]
 id = "T72"
-status = "todo"
+status = "done"
 task = "Deterministic scope/cost estimator — classic (non-LLM) tooling to understand each task's situation + size: file/LOC scope (cloc-style), dependency-graph position (fan-in/out, critical-path depth), complexity heuristics, rough token/effort cost. Per-node estimate feeds parallelization (T62 ready-set), rough budget (T70), and model right-sizing (T73). Offload UNDERSTANDING to deterministic Rust; reserve the model for judgement."
 deps = []
 priority = 2
@@ -1354,7 +1354,7 @@ risk = 2
 
 [[task]]
 id = "T77"
-status = "todo"
+status = "done"
 task = "Task delegation flow — fan-out work to sub-agents under deterministic config rules ([delegation]). Three gates: (1) SAFE = parallelize only dep-independent AND scope-disjoint ready tasks (scope-disjoint = 'don't block each other' = no write-conflict; overlapping scope -> serialize; worktree isolation as belt+suspenders); (2) WORTH-IT = within max_concurrent + budget, skip fan-out when setup overhead > gain; (3) WHO = competence match (agent skills superset node tags) + cheap model-tier for independent leaves + availability. parallelizable_set = deterministic graph computation over deps + scope (both already in store)."
 deps = ["T62"]
 priority = 2
