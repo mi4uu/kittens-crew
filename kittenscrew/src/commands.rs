@@ -482,6 +482,10 @@ fn gen_prompt(goal: &str, feedback: &str) -> String {
          dependency DAG, no cycles); each scope is exactly ONE relative .rs path; keep it MINIMAL — \
          the fewest leaves that satisfy the goal. Each task sentence must be self-contained so the \
          builder needs only that one sentence.\n\n\
+         STRONGLY PREFER A SINGLE FILE (`main.rs`) — a small program is ONE leaf. Split into more \
+         files ONLY when the goal is genuinely large. If you DO split: exactly one file is the crate \
+         root `main.rs`, it contains `fn main`, and its task says it declares `mod <name>;` for every \
+         other file (so the program links as one binary). Other files expose `pub` items only.\n\n\
          GOAL: {goal}{retry}"
     )
 }

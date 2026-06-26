@@ -45,6 +45,43 @@ pub fn rustc_compiles(file: &Path) -> Verdict {
     }
 }
 
+/// Whole-crate verify (the multi-file ceiling fix): per-node `rustc_compiles` only
+/// type-checks each leaf as an isolated `lib`, so a plan split across files gets green
+/// leaves but never assembles into a runnable program. This is the honest final gate —
+/// it builds the actual binary the user asked for.
+///
+/// We find the crate root among the written leaves (the one file with a `fn main`) and
+/// hand THAT to `rustc`. rustc resolves `mod foo;` to the sibling `foo.rs` itself, so a
+/// properly-wired multi-file program links with no Cargo.toml. Returns:
+///   - `Ok(None)`   — no `fn main` among the leaves → a pure library, nothing to assemble.
+///   - `Ok(Some(p))`— a binary built at `p` (the program actually runs).
+///   - `Err(detail)`— the crate root exists but the whole program does NOT build.
+pub fn build_binary(written: &[std::path::PathBuf]) -> Result<Option<std::path::PathBuf>, String> {
+    let root = written.iter().find(|p| {
+        std::fs::read_to_string(p)
+            .map(|s| s.contains("fn main"))
+            .unwrap_or(false)
+    });
+    let Some(root) = root else {
+        return Ok(None);
+    };
+    let stem = root.file_stem().and_then(|s| s.to_str()).unwrap_or("prog");
+    // Place the binary next to the crate root (== the project dir for `run`), so a
+    // single-file program lands as `./<stem>` exactly where the user expects it.
+    let bin = root.with_file_name(stem);
+    let out = Command::new("rustc")
+        .args(["--edition", "2021", "-o"])
+        .arg(&bin)
+        .arg(root)
+        .output()
+        .map_err(|e| format!("rustc spawn failed: {e}"))?;
+    if out.status.success() {
+        Ok(Some(bin))
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).into_owned())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,6 +99,34 @@ mod tests {
         let p = tmp("ok", "pub fn add(a: i64, b: i64) -> i64 { a + b }\n");
         assert!(rustc_compiles(&p).ok);
         let _ = std::fs::remove_file(p);
+    }
+
+    /// The ceiling fix: two leaves that each lib-compile in isolation must ALSO assemble
+    /// into a runnable binary. `main.rs` declares `mod helper;` → rustc pulls in helper.rs.
+    #[test]
+    fn whole_crate_assembles_multi_file_binary() {
+        let dir = std::env::temp_dir().join(format!("ks_wc_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let helper = dir.join("helper.rs");
+        let main = dir.join("main.rs");
+        std::fs::write(&helper, "pub fn val() -> i64 { 42 }\n").unwrap();
+        std::fs::write(&main, "mod helper;\nfn main() { println!(\"{}\", helper::val()); }\n").unwrap();
+        // Order shouldn't matter — build_binary finds the `fn main` leaf as the root.
+        let bin = build_binary(&[helper.clone(), main.clone()]).unwrap();
+        assert!(bin.is_some(), "expected a binary");
+        assert!(bin.unwrap().exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Pure-library leaves (no `fn main`) → nothing to assemble, not an error.
+    #[test]
+    fn whole_crate_skips_library() {
+        let dir = std::env::temp_dir().join(format!("ks_wclib_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let lib = dir.join("lib.rs");
+        std::fs::write(&lib, "pub fn add(a: i64, b: i64) -> i64 { a + b }\n").unwrap();
+        assert!(build_binary(&[lib]).unwrap().is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

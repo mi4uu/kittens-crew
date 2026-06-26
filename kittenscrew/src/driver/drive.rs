@@ -46,6 +46,9 @@ pub fn drive(
     mut progress: impl FnMut(&str, &str),
 ) -> Result<Outcome, String> {
     let mut done = 0u32;
+    // Whole-crate verify (multi-file ceiling fix): the green leaves, to assemble into a
+    // runnable binary once the frontier empties. Only used on the confined `run` path.
+    let mut written: Vec<PathBuf> = Vec::new();
     // T86: nodes whose verify never passed. They are retired (Killed) so they leave the
     // ready frontier, but the run CONTINUES to other independent ready nodes instead of
     // halting globally. Only a frontier emptied WITH failures is a real (partial) stall.
@@ -55,6 +58,22 @@ pub fn drive(
         let next = plan::next(&store).map(|t| (t.id.clone(), t.task.clone(), t.scope.clone()));
         let (id, task, scope) = match next {
             None => {
+                // Frontier empty + all green → assemble the actual program (run path only).
+                // A failed whole-crate build is a real Halt: green leaves, but the program
+                // the user described does NOT run.
+                if failed.is_empty() && opts.workspace_root.is_some() {
+                    match verify::build_binary(&written) {
+                        Ok(Some(bin)) => progress("·crate", &format!("✓ built {}", bin.display())),
+                        Ok(None) => {}
+                        Err(detail) => {
+                            return Ok(Outcome::Halted {
+                                node: "·crate".into(),
+                                reason: format!("whole-crate build failed: {}", first_line(&detail)),
+                                done,
+                            });
+                        }
+                    }
+                }
                 return Ok(if failed.is_empty() {
                     Outcome::Converged { done }
                 } else {
@@ -142,6 +161,7 @@ pub fn drive(
 
         // Advance: mark the node done in the authoritative store.
         mark_done(&opts.store_path, &id)?;
+        written.push(target.clone());
         progress(&id, &model);
         done += 1;
     }
