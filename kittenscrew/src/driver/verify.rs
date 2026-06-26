@@ -88,6 +88,11 @@ pub fn build_binary(written: &[std::path::PathBuf]) -> Result<Option<std::path::
 /// green but fails its own `[a,b,c] => "c b a"` case. Returns the first mismatch as a
 /// detail the repair loop can feed back to the model.
 pub fn run_accept(bin: &std::path::Path, cases: &[crate::store::AcceptCase]) -> Result<(), String> {
+    // `Command::new` treats a bare name with no separator (e.g. "main", a single-file
+    // program built at the workspace root) as a PATH lookup, not a cwd-relative file —
+    // so it fails to find the binary we just built. Absolutise so it always runs the file.
+    let bin = std::fs::canonicalize(bin).unwrap_or_else(|_| bin.to_path_buf());
+    let bin = bin.as_path();
     for c in cases {
         let out = Command::new(bin)
             .args(&c.args)

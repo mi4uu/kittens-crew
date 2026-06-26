@@ -207,6 +207,15 @@ pub fn drive(
             continue;
         }
 
+        // Council deliberation (run path only): the kitties post to the blackboard so a
+        // real run leaves a deliberation trail the `council` TUI surfaces. The Builder 🔨
+        // reports the delivery; the Grill 🔥 red-teams the leaf for compiles-but-stub
+        // smells. Surfacing only — the deterministic verify already gated the advance — so
+        // this never blocks the loop (bench/tests pass workspace_root None and skip it).
+        if opts.workspace_root.is_some() {
+            post_council(&id, &model, &target);
+        }
+
         // Advance: mark the node done in the authoritative store.
         mark_done(&opts.store_path, &id)?;
         written.push(target.clone());
@@ -262,6 +271,34 @@ pub(crate) fn extract_code(text: &str) -> String {
 
 fn first_line(s: &str) -> &str {
     s.lines().find(|l| !l.trim().is_empty()).unwrap_or("").trim()
+}
+
+/// Post the per-node council deliberation to the blackboard (topic = node id). The
+/// Builder reports the build; the Grill red-teams the leaf. A best-effort side-effect:
+/// a board write that fails must never derail the build, so errors are swallowed.
+fn post_council(id: &str, model: &str, target: &Path) {
+    use crate::board::{self, Opinion};
+    let _ = board::post(&Opinion {
+        kitty: "builder".into(),
+        topic: id.into(),
+        stance: "built".into(),
+        confidence: 0.8,
+        competence: 0.9, // building is the Builder's home domain
+        seq: 0,
+    });
+    let code = std::fs::read_to_string(target).unwrap_or_default();
+    let (stance, confidence) = match board::grill_smells(&code) {
+        Some(reason) => (format!("reject: {reason}"), 0.9),
+        None => (format!("approve ({model})"), 0.6),
+    };
+    let _ = board::post(&Opinion {
+        kitty: "grill".into(),
+        topic: id.into(),
+        stance,
+        confidence,
+        competence: 0.9, // red-teaming is the Grill's home domain
+        seq: 0,
+    });
 }
 
 /// Mark a node done in the store. ponytail: skips the SPEC.md re-render (that's a

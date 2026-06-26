@@ -118,6 +118,28 @@ pub fn verdict(opinions: &[Opinion], topic: &str) -> Option<Verdict> {
     })
 }
 
+/// The Grill 🔥 (adversarial red-team) reads a freshly-built leaf and hunts the
+/// hole that compiles green but isn't really done. The deterministic verify gate
+/// already proves "it compiles + behaves"; the Grill catches the OTHER lie — a stub
+/// that type-checks. Returns a reject reason if it smells one, else `None` (approve).
+///
+/// Kept to cheap, certain signals (no model, no false positives on real code):
+/// `todo!`/`unimplemented!`/`unreachable!` macros and a bare `panic!(...)` body are
+/// the classic "I gave up but it compiles" markers. This is intentionally narrow —
+/// it can grow teeth (a model critic) later, but a deterministic smell never lies.
+pub fn grill_smells(code: &str) -> Option<String> {
+    for (needle, why) in [
+        ("todo!", "contains a `todo!()` — the leaf is a stub, not a delivery"),
+        ("unimplemented!", "contains `unimplemented!()` — not actually built"),
+        ("unreachable!", "contains `unreachable!()` — a placeholder branch"),
+    ] {
+        if code.contains(needle) {
+            return Some(why.to_string());
+        }
+    }
+    None
+}
+
 // ── persistence internals (path-injectable so tests stay off the project board) ──
 
 /// Append one opinion line to `path`, creating the parent dir + file as needed.
@@ -240,6 +262,16 @@ mod tests {
     /// The governance point: a single HIGH-competence cat beats a low-competence
     /// MAJORITY. Three off-domain cats (competence 0.2) lose to one on-domain cat
     /// (competence 1.0) even though they're the numerical majority.
+    #[test]
+    #[test]
+    fn grill_smells_stub_macros_not_real_code() {
+        assert!(grill_smells("fn f() { todo!() }").is_some());
+        assert!(grill_smells("fn f() { unimplemented!() }").is_some());
+        assert!(grill_smells("fn f() -> i64 { 1 + 2 }").is_none());
+        // A real implementation that merely mentions the word "panic" in a comment is fine.
+        assert!(grill_smells("// no panic here\nfn f() -> i64 { 0 }").is_none());
+    }
+
     #[test]
     fn competence_lets_minority_win() {
         let ops = vec![
