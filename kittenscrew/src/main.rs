@@ -12,6 +12,7 @@ mod cli;
 mod commands;
 mod compression;
 mod config;
+mod council;
 mod docs;
 mod drift;
 mod driver;

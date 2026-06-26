@@ -53,6 +53,14 @@ pub fn load() -> Vec<Opinion> {
     load_from(Path::new(BOARD_PATH))
 }
 
+/// Path-injectable load — same tolerant read as [`load`] but against an arbitrary
+/// board file. Exposed so other readers (the council fold) can replay a throwaway
+/// fixture in tests instead of the project board, without re-implementing the
+/// skip-garbage / missing-file-is-empty parsing.
+pub fn load_path(path: &Path) -> Vec<Opinion> {
+    load_from(path)
+}
+
 /// Borrowed view of just the opinions on `topic`, in board (append) order.
 pub fn for_topic<'a>(opinions: &'a [Opinion], topic: &str) -> Vec<&'a Opinion> {
     opinions.iter().filter(|o| o.topic == topic).collect()

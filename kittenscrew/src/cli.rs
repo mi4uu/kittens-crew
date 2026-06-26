@@ -109,6 +109,19 @@ pub enum Cmd {
         #[command(subcommand)]
         action: BoardAction,
     },
+    /// Council view (P4) — fold the driver event log + opinion board into one
+    /// ordered feed, split into three streams (board | to-me | thoughts). Prints a
+    /// coloured snapshot dashboard; with `--fzf` (and a tty) pipes it through fzf
+    /// with a preview pane showing each line's full detail.
+    Council {
+        /// Filter to one stream: `board` | `to-me` | `thoughts` (omit → all three).
+        #[arg(long)]
+        stream: Option<String>,
+        /// Interactive: pipe through fzf with a detail preview pane. Falls back to
+        /// the plain snapshot if fzf is absent or stdout is not a tty.
+        #[arg(long)]
+        fzf: bool,
+    },
     /// Init: write kittenscrew.toml + register the hook membrane (T16).
     Init {
         /// Dir holding `settings.json` (default: `$HOME/.claude`). Isolates the

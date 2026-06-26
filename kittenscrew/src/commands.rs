@@ -6,8 +6,8 @@ use crate::cli::{
 };
 use crate::error::KittenError;
 use crate::{
-    board, check, compression, config, docs, drift, hook, init, kitty, plan, score, spec, squeez,
-    store,
+    board, check, compression, config, council, docs, drift, hook, init, kitty, plan, score, spec,
+    squeez, store,
 };
 use std::io::Read;
 
@@ -43,6 +43,7 @@ pub(crate) fn run(cli: Cli) -> Result<(), KittenError> {
             max_retries,
         } => bench_cmd(store, k, max_iters, max_retries),
         Cmd::Board { action } => board_cmd(action),
+        Cmd::Council { stream, fzf } => council_cmd(stream, fzf),
         Cmd::Config { action } => config_cmd(action),
         Cmd::Compression { action } => compression_cmd(action),
         Cmd::Docs { action } => docs_cmd(action),
@@ -173,6 +174,134 @@ fn board_cmd(action: BoardAction) -> Result<(), KittenError> {
             }
         }
     }
+}
+
+/// P4 — the council view. Fold the driver event log + opinion board into one
+/// ordered, three-stream feed and surface it. The Helper Kitty 🐾 narrates the
+/// header: she is the faithful voice of all the streams (progress + decisions +
+/// thoughts), so she frames the dashboard the watcher is about to read.
+///
+/// `--fzf` (and a tty) → an interactive picker with a detail preview; otherwise the
+/// plain coloured snapshot (`render_compact`). Filtering to one stream applies in
+/// both modes.
+fn council_cmd(stream: Option<String>, fzf: bool) -> Result<(), KittenError> {
+    // Resolve the optional `--stream` filter; an unknown value is a hard error so a
+    // typo doesn't silently show everything.
+    let filter = match stream.as_deref() {
+        Some(s) => Some(council::Stream::parse(s).ok_or_else(|| {
+            KittenError::Validation(format!(
+                "unknown stream `{s}` — expected board | to-me | thoughts"
+            ))
+        })?),
+        None => None,
+    };
+
+    let lines = council::lines();
+    let narrator = kitty::lookup("helper").expect("helper kitty");
+
+    if lines.is_empty() {
+        println!("{}", kitty::say(narrator, "council is quiet — no events or opinions yet"));
+        return Ok(());
+    }
+
+    // Header: who's narrating + what's on screen.
+    let scope = filter
+        .map(|f| format!(" ({:?} stream)", f))
+        .unwrap_or_default();
+    println!(
+        "{}",
+        kitty::say(narrator, &format!("council view — {} line(s){scope}", lines.len()))
+    );
+
+    // Interactive fzf path only when explicitly asked AND stdout is a real tty AND
+    // fzf is on PATH — otherwise degrade to the snapshot rather than erroring.
+    use std::io::IsTerminal;
+    if fzf && std::io::stdout().is_terminal() && fzf_on_path() {
+        return council_fzf(&lines, filter);
+    }
+
+    print!("{}", council::render_compact(&lines, filter));
+    Ok(())
+}
+
+/// Is `fzf` resolvable on PATH? Cheap `--version` probe; any spawn error → no.
+fn fzf_on_path() -> bool {
+    std::process::Command::new("fzf")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Pipe the compact lines into fzf with a detail preview pane, no extra crate.
+///
+/// fzf can't see a line's `detail` from the piped summary alone, so we stage the
+/// details in a temp file (one per line, index-aligned) and let fzf's `{n}` token —
+/// the 0-based index of the highlighted row — drive `sed -n "$((n+1))p" <tmp>` to
+/// print the matching detail into the preview. The list itself is fed as
+/// `idx \t coloured-summary`; `--with-nth=2..` hides the leading index column from
+/// the display while `--ansi` keeps the kitty colours.
+fn council_fzf(
+    lines: &[council::Line],
+    filter: Option<council::Stream>,
+) -> Result<(), KittenError> {
+    use std::io::Write;
+
+    // Apply the stream filter up front so the index space matches what's shown.
+    let shown: Vec<&council::Line> = lines
+        .iter()
+        .filter(|l| filter.map(|f| l.stream == f).unwrap_or(true))
+        .collect();
+    if shown.is_empty() {
+        return Ok(());
+    }
+
+    // Stage details, one per line, in index order — the preview's lookup table.
+    let tmp = std::env::temp_dir().join(format!("ks_council_detail_{}", std::process::id()));
+    {
+        let mut f = std::fs::File::create(&tmp)
+            .map_err(|e| KittenError::Validation(format!("council fzf: temp file: {e}")))?;
+        for l in &shown {
+            // One physical line per detail so `sed -n Np` lands on the right row.
+            writeln!(f, "{}", l.detail.replace('\n', " "))
+                .map_err(|e| KittenError::Validation(format!("council fzf: write: {e}")))?;
+        }
+    }
+
+    // sed is 1-based; fzf's {n} is 0-based → print line n+1 of the detail table.
+    let preview = format!("sed -n \"$(({{n}}+1))p\" {}", tmp.display());
+
+    let mut child = std::process::Command::new("fzf")
+        .arg("--ansi")
+        .arg("--delimiter=\t")
+        .arg("--with-nth=2..") // hide the leading index column from the list view
+        .arg("--preview")
+        .arg(preview)
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| KittenError::Validation(format!("council fzf: spawn: {e}")))?;
+
+    if let Some(stdin) = child.stdin.take() {
+        let mut w = std::io::BufWriter::new(stdin);
+        for (i, l) in shown.iter().enumerate() {
+            let color = match &l.kitty {
+                Some(id) => kitty::color(id),
+                None => match l.stream {
+                    council::Stream::ToMe => kitty::color("helper"),
+                    _ => "90",
+                },
+            };
+            // `idx \t coloured summary` — idx feeds the preview, summary is shown.
+            let _ = writeln!(w, "{i}\t\x1b[{color}m{}\x1b[0m", l.summary);
+        }
+        // Drop w to close the pipe so fzf sees EOF.
+    }
+
+    let _ = child.wait();
+    let _ = std::fs::remove_file(&tmp);
+    Ok(())
 }
 
 pub(crate) const SPEC_PATH: &str = "SPEC.md";
