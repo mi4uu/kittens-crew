@@ -186,6 +186,12 @@ pub enum SpecAction {
         /// Retries feeding validation errors back to the model before giving up.
         #[arg(long, default_value_t = 3)]
         max_retries: u32,
+        /// Behavioural acceptance case(s), the honest done-oracle for a program:
+        /// `'<args> => <expected stdout>'` (e.g. `--accept '5 => 120'`). Repeatable.
+        /// You become the oracle — `run` builds until the binary matches. More reliable
+        /// than letting the model write its own test.
+        #[arg(long = "accept")]
+        accept: Vec<String>,
     },
     /// Structural validation: deps/cites resolve, ids unique, no cycle.
     Check,

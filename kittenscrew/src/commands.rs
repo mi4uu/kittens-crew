@@ -154,8 +154,8 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             );
             Ok(())
         }
-        SpecAction::Gen { goal, store, model, max_retries } => {
-            gen_cmd(goal, store, model, max_retries)
+        SpecAction::Gen { goal, store, model, max_retries, accept } => {
+            gen_cmd(goal, store, model, max_retries, accept)
         }
         SpecAction::Check => {
             let s = store::Store::load(Path::new(store::STORE_PATH))?;
@@ -387,9 +387,24 @@ fn gen_cmd(
     store: Option<std::path::PathBuf>,
     model: Option<String>,
     max_retries: u32,
+    accept: Vec<String>,
 ) -> Result<(), KittenError> {
     use crate::driver::api::{Driver, HttpDriver};
     use crate::driver::drive::extract_code;
+
+    // Parse `'<args> => <expected stdout>'` into acceptance cases. Args split on whitespace.
+    let user_accept = accept
+        .iter()
+        .map(|s| {
+            let (lhs, rhs) = s.split_once("=>").ok_or_else(|| {
+                KittenError::Validation(format!("--accept must be '<args> => <stdout>', got `{s}`"))
+            })?;
+            Ok(store::AcceptCase {
+                args: lhs.split_whitespace().map(|w| w.to_string()).collect(),
+                stdout: rhs.trim().to_string(),
+            })
+        })
+        .collect::<Result<Vec<_>, KittenError>>()?;
 
     let store_path = store.unwrap_or_else(|| std::path::PathBuf::from(store::STORE_PATH));
     if let Some(p) = store_path.parent() {
@@ -460,13 +475,31 @@ fn gen_cmd(
             continue;
         }
 
+        // User-supplied acceptance cases override the model's (more reliable — you are the
+        // oracle). Attach to the crate-root task (scope basename main.rs), else the last task.
+        if !user_accept.is_empty() {
+            let idx = s
+                .tasks
+                .iter()
+                .position(|t| t.scope.iter().any(|p| p.ends_with("main.rs")))
+                .or(s.tasks.len().checked_sub(1));
+            if let Some(i) = idx {
+                s.tasks[i].accept = user_accept.clone();
+            }
+        }
+
         s.save(&store_path)?;
         if store_path == std::path::Path::new(store::STORE_PATH) {
             std::fs::write(SPEC_PATH, spec::render(&s))?;
         }
+        let acc_note = if user_accept.is_empty() {
+            String::new()
+        } else {
+            format!(" + {} accept case(s)", user_accept.len())
+        };
         println!(
             "{}",
-            kitty::say(k, &format!("planned {} task(s) → {}", diffs.len(), store_path.display()))
+            kitty::say(k, &format!("planned {} task(s){acc_note} → {}", diffs.len(), store_path.display()))
         );
         return Ok(());
     }
@@ -498,6 +531,11 @@ fn gen_prompt(goal: &str, feedback: &str) -> String {
          files ONLY when the goal is genuinely large. If you DO split: exactly one file is the crate \
          root `main.rs`, it contains `fn main`, and its task says it declares `mod <name>;` for every \
          other file (so the program links as one binary). Other files expose `pub` items only.\n\n\
+         For the crate-root task (the one with fn main), ALSO add an `accept` array to its payload: \
+         1-3 behavioural test cases proving the program does what the GOAL asks. Each case is \
+         {{\"args\":[\"<cli arg>\",...],\"stdout\":\"<exact expected stdout, trimmed>\"}}. These define \
+         'done' — the binary is run with args and its stdout must match. Make them concrete and correct \
+         per the GOAL (e.g. a factorial CLI: {{\"args\":[\"5\"],\"stdout\":\"120\"}}).\n\n\
          GOAL: {goal}{retry}"
     )
 }

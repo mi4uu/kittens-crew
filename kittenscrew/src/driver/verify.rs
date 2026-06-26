@@ -82,6 +82,31 @@ pub fn build_binary(written: &[std::path::PathBuf]) -> Result<Option<std::path::
     }
 }
 
+/// Behavioural acceptance gate: run the built binary for each case and diff its
+/// stdout (trimmed) against the expected output. This is what catches "compiles but
+/// wrong" — e.g. a reverse-words CLI that leaks `args[0]` (the binary path) compiles
+/// green but fails its own `[a,b,c] => "c b a"` case. Returns the first mismatch as a
+/// detail the repair loop can feed back to the model.
+pub fn run_accept(bin: &std::path::Path, cases: &[crate::store::AcceptCase]) -> Result<(), String> {
+    for c in cases {
+        let out = Command::new(bin)
+            .args(&c.args)
+            .output()
+            .map_err(|e| format!("could not run {}: {e}", bin.display()))?;
+        let got = String::from_utf8_lossy(&out.stdout);
+        if got.trim() != c.stdout.trim() {
+            return Err(format!(
+                "accept case `{} {}` — expected `{}`, got `{}`",
+                bin.file_name().and_then(|s| s.to_str()).unwrap_or("prog"),
+                c.args.join(" "),
+                c.stdout.trim(),
+                got.trim()
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,6 +140,30 @@ mod tests {
         let bin = build_binary(&[helper.clone(), main.clone()]).unwrap();
         assert!(bin.is_some(), "expected a binary");
         assert!(bin.unwrap().exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The behavioural gate catches "compiles but wrong": a program that echoes its
+    /// args verbatim passes a build but FAILS a reverse-words accept case.
+    #[test]
+    fn accept_catches_wrong_behaviour() {
+        use crate::store::AcceptCase;
+        let dir = std::env::temp_dir().join(format!("ks_acc_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        // A buggy "reverse" that just re-prints args in order.
+        let main = dir.join("main.rs");
+        std::fs::write(
+            &main,
+            "fn main(){ let a:Vec<String>=std::env::args().skip(1).collect(); println!(\"{}\", a.join(\" \")); }\n",
+        )
+        .unwrap();
+        let bin = build_binary(&[main.clone()]).unwrap().unwrap();
+        let good = vec![AcceptCase { args: vec!["a".into(), "b".into()], stdout: "a b".into() }];
+        assert!(run_accept(&bin, &good).is_ok());
+        let rev = vec![AcceptCase { args: vec!["a".into(), "b".into()], stdout: "b a".into() }];
+        let err = run_accept(&bin, &rev).unwrap_err();
+        assert!(err.contains("expected `b a`"), "got {err}");
+        assert!(err.contains("got `a b`"), "got {err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

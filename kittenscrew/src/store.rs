@@ -80,6 +80,22 @@ pub struct Task {
     /// Self-eval filled @ done (T39, feeds value-variance V25). toml-only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub eval: Option<TaskEval>,
+    /// Behavioural acceptance cases (the done-oracle for a PROGRAM): given `args`,
+    /// the built binary must print `stdout`. "Compiles" is the thinnest check for a
+    /// library; for a program the honest check is "does it produce the right output".
+    /// Empty = compile-only (the prior behaviour). toml-only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accept: Vec<AcceptCase>,
+}
+
+/// One behavioural acceptance case: run the binary with `args`, expect `stdout`
+/// (compared trimmed). The planner emits these per program goal; they turn the
+/// whole-crate gate from "it builds" into "it does what was asked".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AcceptCase {
+    #[serde(default)]
+    pub args: Vec<String>,
+    pub stdout: String,
 }
 
 /// Completion self-eval (V23/V25). Present only after a task is done.
@@ -112,6 +128,7 @@ impl Default for Task {
             difficulty: 0,
             risk: 0,
             eval: None,
+            accept: Vec::new(),
         }
     }
 }

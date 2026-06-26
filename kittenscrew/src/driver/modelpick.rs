@@ -244,6 +244,7 @@ mod tests {
             difficulty,
             risk,
             eval: None,
+            accept: vec![],
         }
     }
 

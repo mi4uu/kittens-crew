@@ -63,7 +63,26 @@ pub fn drive(
                 // the user described does NOT run.
                 if failed.is_empty() && opts.workspace_root.is_some() {
                     match verify::build_binary(&written) {
-                        Ok(Some(bin)) => progress("·crate", &format!("✓ built {}", bin.display())),
+                        Ok(Some(bin)) => {
+                            progress("·crate", &format!("✓ built {}", bin.display()));
+                            // Behavioural gate: a program must also DO what was asked, not just
+                            // compile. Run every task's accept cases against the binary.
+                            let cases: Vec<_> = store
+                                .tasks
+                                .iter()
+                                .flat_map(|t| t.accept.iter().cloned())
+                                .collect();
+                            if let Err(detail) = verify::run_accept(&bin, &cases) {
+                                return Ok(Outcome::Halted {
+                                    node: "·crate".into(),
+                                    reason: format!("built but behaviour wrong: {}", first_line(&detail)),
+                                    done,
+                                });
+                            }
+                            if !cases.is_empty() {
+                                progress("·crate", &format!("✓ {} accept case(s) passed", cases.len()));
+                            }
+                        }
                         Ok(None) => {}
                         Err(detail) => {
                             return Ok(Outcome::Halted {
@@ -137,6 +156,13 @@ pub fn drive(
                 .dispatch(&Turn { prompt })
                 .map_err(|e| format!("{id}: dispatch: {e}"))?;
             let code = extract_code(&res.text);
+            // An empty (or whitespace-only) leaf compiles fine as an empty lib crate — a
+            // FALSE green that converges on a program with no code. Treat it as a failed
+            // attempt so the retry/repair loop re-prompts instead of marking it done.
+            if code.trim().is_empty() {
+                last_err = "model returned no code (empty output)".into();
+                continue;
+            }
             std::fs::write(&target, &code)
                 .map_err(|e| format!("{id}: write {}: {e}", target.display()))?;
             let v = verify::rustc_compiles(&target);
