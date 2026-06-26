@@ -426,6 +426,18 @@ fn gen_cmd(
             }
         };
 
+        // Lenient section coercion: gen ONLY ever emits build tasks (§T). Weaker models
+        // (lfm2, ornith) mislabel the section as §1/§2/etc and `spec::apply` rejects them,
+        // burning every retry on a token typo. Force every gen diff to §T — there is no
+        // other valid target here, so this can't mask a real mistake.
+        let diffs: Vec<spec::Diff> = diffs
+            .into_iter()
+            .map(|mut d| {
+                d.section = "§T".into();
+                d
+            })
+            .collect();
+
         // Apply onto a fresh load each attempt so a failed try doesn't accumulate.
         let mut s = store::Store::load(&store_path)?;
         let mut apply_err = None;
