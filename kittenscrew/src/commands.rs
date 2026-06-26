@@ -1,12 +1,13 @@
 //! Command dispatch (`run`) + every subcommand handler and its shared helpers.
 
 use crate::cli::{
-    CheckAction, Cli, Cmd, CompressionAction, ConfigAction, DocsAction, KittyAction, PlanAction,
-    SpecAction,
+    BoardAction, CheckAction, Cli, Cmd, CompressionAction, ConfigAction, DocsAction, KittyAction,
+    PlanAction, SpecAction,
 };
 use crate::error::KittenError;
 use crate::{
-    check, compression, config, docs, drift, hook, init, kitty, plan, score, spec, squeez, store,
+    board, check, compression, config, docs, drift, hook, init, kitty, plan, score, spec, squeez,
+    store,
 };
 use std::io::Read;
 
@@ -41,6 +42,7 @@ pub(crate) fn run(cli: Cli) -> Result<(), KittenError> {
             max_iters,
             max_retries,
         } => bench_cmd(store, k, max_iters, max_retries),
+        Cmd::Board { action } => board_cmd(action),
         Cmd::Config { action } => config_cmd(action),
         Cmd::Compression { action } => compression_cmd(action),
         Cmd::Docs { action } => docs_cmd(action),
@@ -71,6 +73,106 @@ fn kitty_list() -> Result<(), KittenError> {
         println!("{}|{}|{}|{}", k.id, k.emoji, k.name, k.role);
     }
     Ok(())
+}
+
+/// Governance layer (opinion board + council verdict). `post`/`list` speak AS the
+/// kitty voicing the opinion; `verdict` speaks as the Orchestrating Kitty 🎩, since
+/// the Big Boss ratifies the council's ruling (final word).
+fn board_cmd(action: BoardAction) -> Result<(), KittenError> {
+    match action {
+        BoardAction::Post {
+            kitty,
+            topic,
+            stance,
+            confidence,
+            competence,
+        } => {
+            let k = kitty::lookup(&kitty)
+                .ok_or_else(|| KittenError::Validation(format!("unknown kitty: {kitty}")))?;
+            // seq 0 → board.post stamps the real monotonic index on append.
+            let opinion = board::Opinion {
+                kitty: k.id.to_string(),
+                topic: topic.clone(),
+                stance: stance.clone(),
+                confidence,
+                competence,
+                seq: 0,
+            };
+            board::post(&opinion)?;
+            println!(
+                "{}",
+                kitty::say(
+                    k,
+                    &format!(
+                        "posted on '{topic}': {stance} (confidence {confidence:.2}, competence {competence:.2})"
+                    )
+                )
+            );
+            Ok(())
+        }
+        BoardAction::List { topic } => {
+            let all = board::load();
+            let shown: Vec<&board::Opinion> = match &topic {
+                Some(t) => board::for_topic(&all, t),
+                None => all.iter().collect(),
+            };
+            if shown.is_empty() {
+                let k = kitty::lookup("orchestrating").expect("orchestrating kitty");
+                println!("{}", kitty::say(k, "board is empty — no opinions yet"));
+                return Ok(());
+            }
+            for o in shown {
+                // Each opinion is voiced by its own kitty (fall back to Big Boss if
+                // the id is somehow unknown, so a stale board never crashes the list).
+                let k = kitty::lookup(&o.kitty)
+                    .unwrap_or_else(|| kitty::lookup("orchestrating").expect("orchestrating kitty"));
+                println!(
+                    "{}",
+                    kitty::say(
+                        k,
+                        &format!(
+                            "'{}': {} (confidence {:.2}, competence {:.2})",
+                            o.topic, o.stance, o.confidence, o.competence
+                        )
+                    )
+                );
+            }
+            Ok(())
+        }
+        BoardAction::Verdict { topic } => {
+            let all = board::load();
+            // The council ruling is always ratified by the Orchestrating Kitty 🎩.
+            let k = kitty::lookup("orchestrating").expect("orchestrating kitty");
+            match board::verdict(&all, &topic) {
+                Some(v) => {
+                    let tally = v
+                        .tally
+                        .iter()
+                        .map(|(s, w)| format!("{s} {w:.2}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    println!(
+                        "{}",
+                        kitty::say(
+                            k,
+                            &format!(
+                                "council verdict on '{}': {} (weight {:.2}) — tally: {tally}",
+                                v.topic, v.winner, v.weight
+                            )
+                        )
+                    );
+                    Ok(())
+                }
+                None => {
+                    println!(
+                        "{}",
+                        kitty::say(k, &format!("no opinions on '{topic}' — no verdict"))
+                    );
+                    Ok(())
+                }
+            }
+        }
+    }
 }
 
 pub(crate) const SPEC_PATH: &str = "SPEC.md";

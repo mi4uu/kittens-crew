@@ -102,6 +102,13 @@ pub enum Cmd {
         #[command(subcommand)]
         action: DocsAction,
     },
+    /// Opinion board + council verdict — the governance layer. Kitties post
+    /// stances to a shared blackboard (`.kittenscrew/board.jsonl`); the council
+    /// tallies a verdict by `confidence × competence`, ratified by the Big Boss 🎩.
+    Board {
+        #[command(subcommand)]
+        action: BoardAction,
+    },
     /// Init: write kittenscrew.toml + register the hook membrane (T16).
     Init {
         /// Dir holding `settings.json` (default: `$HOME/.claude`). Isolates the
@@ -114,6 +121,42 @@ pub enum Cmd {
         /// Overwrite an existing `kittenscrew.toml` (default: keep it).
         #[arg(long)]
         force: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum BoardAction {
+    /// Post an opinion as a kitty — appends to the blackboard. confidence = how
+    /// sure the cat is; competence = how well its domain fits the topic (both 0–1).
+    Post {
+        /// Kitty id voicing the opinion (planning|builder|entropy|… ).
+        #[arg(long)]
+        kitty: String,
+        /// Topic under debate.
+        #[arg(long)]
+        topic: String,
+        /// This kitty's stance on the topic.
+        #[arg(long)]
+        stance: String,
+        /// How sure this kitty is, 0.0–1.0 (default 0.5).
+        #[arg(long, default_value_t = 0.5)]
+        confidence: f64,
+        /// How well this kitty's domain fits the topic, 0.0–1.0 (default 0.5).
+        #[arg(long, default_value_t = 0.5)]
+        competence: f64,
+    },
+    /// List posted opinions, optionally filtered to one topic.
+    List {
+        /// Only show opinions on this topic (omit → all).
+        #[arg(long)]
+        topic: Option<String>,
+    },
+    /// Council verdict on a topic: heaviest `confidence × competence` stance wins,
+    /// ratified by the Orchestrating Kitty 🎩 (final word).
+    Verdict {
+        /// Topic to rule on.
+        #[arg(long)]
+        topic: String,
     },
 }
 
