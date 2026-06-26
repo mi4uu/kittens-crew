@@ -154,6 +154,9 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             );
             Ok(())
         }
+        SpecAction::Gen { goal, store, model, max_retries } => {
+            gen_cmd(goal, store, model, max_retries)
+        }
         SpecAction::Check => {
             let s = store::Store::load(Path::new(store::STORE_PATH))?;
             let violations = spec::validate(&s);
@@ -373,6 +376,114 @@ fn plan_cmd(action: PlanAction) -> Result<(), KittenError> {
             Ok(())
         }
     }
+}
+
+/// T17 — spec-from-prose: a model turns a plain-language goal into a validated DAG of
+/// build tasks. The planner half of "describe it → working program" (`gen` plans, `run`
+/// builds). Reuses the exact apply+validate path as `spec apply`; on a §V violation the
+/// errors are fed back to the model to fix and resubmit (bounded).
+fn gen_cmd(
+    goal: String,
+    store: Option<std::path::PathBuf>,
+    model: Option<String>,
+    max_retries: u32,
+) -> Result<(), KittenError> {
+    use crate::driver::api::{Driver, HttpDriver};
+    use crate::driver::drive::extract_code;
+
+    let store_path = store.unwrap_or_else(|| std::path::PathBuf::from(store::STORE_PATH));
+    if let Some(p) = store_path.parent() {
+        let _ = std::fs::create_dir_all(p);
+    }
+    if !store_path.exists() {
+        std::fs::write(&store_path, "schema = 1\n")?;
+    }
+
+    // Same endpoint policy as run/bench: KITTENSCREW_BASE_URL + --model/KITTENSCREW_MODEL.
+    let base = std::env::var("KITTENSCREW_BASE_URL")
+        .map_err(|_| KittenError::Validation("set KITTENSCREW_BASE_URL (OpenAI-compatible endpoint)".into()))?;
+    let m = model
+        .or_else(|| std::env::var("KITTENSCREW_MODEL").ok())
+        .unwrap_or_else(|| "default".into());
+    let key = std::env::var("KITTENSCREW_API_KEY").unwrap_or_else(|_| "x".into());
+    let driver = HttpDriver::openai(&base, m, key);
+
+    let k = kitty::lookup("planning").expect("planning kitty");
+    let mut feedback = String::new();
+    for attempt in 0..=max_retries {
+        let prompt = gen_prompt(&goal, &feedback);
+        let res = driver
+            .dispatch(&crate::driver::api::Turn { prompt })
+            .map_err(|e| KittenError::Validation(format!("model: {e}")))?;
+        let json = extract_code(&res.text);
+
+        let diffs: Vec<spec::Diff> = match serde_json::from_str(json.trim()) {
+            Ok(d) => d,
+            Err(e) => {
+                feedback = format!("Your output was not a valid JSON array of diffs: {e}. Output ONLY the JSON array.");
+                println!("{}", kitty::say(k, &format!("attempt {}: bad JSON, retrying", attempt + 1)));
+                continue;
+            }
+        };
+
+        // Apply onto a fresh load each attempt so a failed try doesn't accumulate.
+        let mut s = store::Store::load(&store_path)?;
+        let mut apply_err = None;
+        for d in &diffs {
+            if let Err(e) = spec::apply(&mut s, d) {
+                apply_err = Some(e);
+                break;
+            }
+        }
+        if let Some(e) = apply_err {
+            feedback = format!("A diff was rejected: {e}. Fix it and resubmit the full array.");
+            println!("{}", kitty::say(k, &format!("attempt {}: {}", attempt + 1, feedback)));
+            continue;
+        }
+
+        let violations = spec::validate(&s);
+        if !violations.is_empty() {
+            feedback = format!("§V violations to fix: {}", violations.join("; "));
+            println!("{}", kitty::say(k, &format!("attempt {}: {}", attempt + 1, feedback)));
+            continue;
+        }
+
+        s.save(&store_path)?;
+        if store_path == std::path::Path::new(store::STORE_PATH) {
+            std::fs::write(SPEC_PATH, spec::render(&s))?;
+        }
+        println!(
+            "{}",
+            kitty::say(k, &format!("planned {} task(s) → {}", diffs.len(), store_path.display()))
+        );
+        return Ok(());
+    }
+    Err(KittenError::Validation(format!(
+        "could not produce a valid plan in {} attempt(s)",
+        max_retries + 1
+    )))
+}
+
+/// The planner prompt: prose goal → a JSON array of `spec apply` diffs (one §T add per
+/// code leaf). `feedback` carries the prior attempt's validation errors (empty first try).
+fn gen_prompt(goal: &str, feedback: &str) -> String {
+    let retry = if feedback.is_empty() {
+        String::new()
+    } else {
+        format!("\n\nYOUR PREVIOUS ATTEMPT FAILED: {feedback}\nFix it and output the corrected array.")
+    };
+    format!(
+        "You are a build planner. Turn the GOAL into a DAG of small build tasks, one task per \
+         Rust source file (a 'leaf' the builder will fill). Output ONLY a JSON array, no prose, \
+         in a single ```json fenced block.\n\n\
+         Each array element is:\n\
+         {{\"section\":\"§T\",\"op\":\"add\",\"payload\":{{\"id\":\"T1\",\"task\":\"<one clear sentence of what this file must contain>\",\"deps\":[],\"scope\":[\"<relative_file.rs>\"],\"priority\":1}}}}\n\n\
+         Rules: ids are unique T1,T2,...; deps reference earlier ids that must build first (a real \
+         dependency DAG, no cycles); each scope is exactly ONE relative .rs path; keep it MINIMAL — \
+         the fewest leaves that satisfy the goal. Each task sentence must be self-contained so the \
+         builder needs only that one sentence.\n\n\
+         GOAL: {goal}{retry}"
+    )
 }
 
 /// T62/T65 — drive the DAG: fill ready code leaves via Codestral, verify each

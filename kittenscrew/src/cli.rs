@@ -171,6 +171,22 @@ pub enum SpecAction {
     },
     /// Apply structured JSON diff(s) from stdin (validates vs §V; exit 2 + unchanged on violation).
     Apply,
+    /// Spec-from-prose (T17): a model turns a plain-language goal into a validated
+    /// DAG of build tasks, written to the store. Iterates with the model on a §V
+    /// violation. The planner step of "describe it → working program".
+    Gen {
+        /// What you want built, in plain language (e.g. "a CLI that reverses a string").
+        goal: String,
+        /// Store to write the plan into (default: the project's .kittenscrew/spec.toml).
+        #[arg(long)]
+        store: Option<std::path::PathBuf>,
+        /// Model id (else KITTENSCREW_MODEL). Endpoint via KITTENSCREW_BASE_URL.
+        #[arg(long)]
+        model: Option<String>,
+        /// Retries feeding validation errors back to the model before giving up.
+        #[arg(long, default_value_t = 3)]
+        max_retries: u32,
+    },
     /// Structural validation: deps/cites resolve, ids unique, no cycle.
     Check,
     /// Bootstrap: parse SPEC.md → `.kittenscrew/spec.toml` (one-time / drift).
