@@ -55,8 +55,9 @@ pub fn drive(
     let mut failed: Vec<String> = Vec::new();
     for _ in 0..opts.max_iters {
         let store = Store::load(&opts.store_path).map_err(|e| e.to_string())?;
-        let next = plan::next(&store).map(|t| (t.id.clone(), t.task.clone(), t.scope.clone()));
-        let (id, task, scope) = match next {
+        let next = plan::next(&store)
+            .map(|t| (t.id.clone(), t.task.clone(), t.scope.clone(), t.accept.clone()));
+        let (id, task, scope, accept) = match next {
             None => {
                 // Frontier empty + all green → assemble the actual program (run path only).
                 // A failed whole-crate build is a real Halt: green leaves, but the program
@@ -166,12 +167,33 @@ pub fn drive(
             std::fs::write(&target, &code)
                 .map_err(|e| format!("{id}: write {}: {e}", target.display()))?;
             let v = verify::rustc_compiles(&target);
-            if v.ok {
-                model = res.model;
-                passed = true;
-                break;
+            if !v.ok {
+                last_err = v.detail;
+                continue;
             }
-            last_err = v.detail;
+            // Behavioural auto-repair: if this leaf is a program crate root (has `fn main`)
+            // and carries accept cases, don't just type-check it — BUILD and run it. A
+            // behaviour mismatch (e.g. the args[0] leak) feeds the diff back through
+            // repair_prompt so the model fixes it itself, instead of converging on a wrong
+            // program. rustc resolves any `mod` siblings from disk (driven earlier as deps).
+            if !accept.is_empty() && code.contains("fn main") {
+                match verify::build_binary(std::slice::from_ref(&target)) {
+                    Ok(Some(bin)) => {
+                        if let Err(detail) = verify::run_accept(&bin, &accept) {
+                            last_err = detail;
+                            continue;
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(detail) => {
+                        last_err = detail;
+                        continue;
+                    }
+                }
+            }
+            model = res.model;
+            passed = true;
+            break;
         }
         if !passed {
             // T86: do NOT halt the whole run. Retire this node (Killed → leaves the ready
@@ -287,6 +309,64 @@ mod tests {
     #[test]
     fn first_line_skips_blanks() {
         assert_eq!(first_line("\n\n  error: bad\nmore"), "error: bad");
+    }
+
+    /// The accept gate auto-repairs behaviour, not just compilation: a program that
+    /// COMPILES but echoes args[0] (the binary path) fails its accept case; the diff is
+    /// fed back and the second attempt — which skips args[0] — passes and advances.
+    #[test]
+    fn accept_failure_drives_behavioural_repair() {
+        use crate::driver::api::{Driver, DriverError, Turn, TurnResult};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct Scripted {
+            n: AtomicUsize,
+            replies: Vec<&'static str>,
+        }
+        impl Driver for Scripted {
+            fn dispatch(&self, _t: &Turn) -> Result<TurnResult, DriverError> {
+                let i = self.n.fetch_add(1, Ordering::SeqCst).min(self.replies.len() - 1);
+                Ok(TurnResult { text: self.replies[i].into(), model: "scripted".into() })
+            }
+            fn model(&self) -> &str {
+                "scripted"
+            }
+        }
+
+        let dir = std::env::temp_dir().join(format!("ks_arepair_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let store_path = dir.join("spec.toml");
+        let main_rs = dir.join("main.rs");
+        std::fs::write(
+            &store_path,
+            format!(
+                "schema = 1\n\n[[task]]\nid = \"T1\"\nstatus = \"todo\"\ntask = \"reverse words\"\ndeps = []\npriority = 1\nscope = [{:?}]\n\n[[task.accept]]\nargs = [\"a\", \"b\", \"c\"]\nstdout = \"c b a\"\n",
+                main_rs.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+
+        let driver = Scripted {
+            n: AtomicUsize::new(0),
+            replies: vec![
+                // Buggy: includes args[0] (the binary path) → output has a trailing path.
+                "```rust\nfn main(){let a:Vec<String>=std::env::args().collect();let mut r=a.clone();r.reverse();println!(\"{}\", r.join(\" \"));}\n```",
+                // Fixed: skip(1) drops the binary name → "c b a".
+                "```rust\nfn main(){let mut a:Vec<String>=std::env::args().skip(1).collect();a.reverse();println!(\"{}\", a.join(\" \"));}\n```",
+            ],
+        };
+        let opts = DriveOpts {
+            max_iters: 5,
+            max_retries: 2,
+            store_path: store_path.clone(),
+            // workspace_root None: per-node accept still runs (it's gated on accept cases, not
+            // on the sandbox); only the post-converge whole-crate gate is run-path-only.
+            workspace_root: None,
+        };
+        let out = drive(&driver, &opts, |_, _| {}).unwrap();
+        assert!(matches!(out, Outcome::Converged { done: 1 }), "got {out:?}");
+        assert_eq!(driver.n.load(Ordering::SeqCst), 2, "should have repaired once");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// T74: a leaf that first comes back broken is recovered by feeding the rustc
