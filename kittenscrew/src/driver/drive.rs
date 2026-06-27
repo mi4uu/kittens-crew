@@ -166,11 +166,20 @@ pub fn drive(
         let mut last_err = String::new();
         let mut model = String::new();
         let mut passed = false;
+        // Keep-best (anti-thrash): the repair loop used to re-prompt from scratch each time,
+        // so a model beyond its depth produced a DIFFERENT broken program every retry (even
+        // regressing parts that already worked). Now we (a) show the model its OWN previous
+        // code to PATCH, and (b) score each attempt by accept-cases-passing and never repair
+        // from a regression — we restore the best-so-far and ask only for the remaining fix.
+        let mut repair_from = String::new(); // the code we hand back for the model to patch
+        let mut best_code = String::new(); // highest-scoring compiling attempt so far
+        let mut best_score: i32 = -1; // -1 = nothing has compiled yet; else #accept cases passing
+        let n_cases = accept.len();
         for attempt in 0..=opts.max_retries {
             let prompt = if attempt == 0 {
                 scoped_prompt(&task, &target)
             } else {
-                repair_prompt(&task, &target, &last_err)
+                repair_prompt(&task, &target, &repair_from, &last_err)
             };
             let res = driver
                 .dispatch(&Turn { prompt })
@@ -188,26 +197,47 @@ pub fn drive(
             let v = verify::check_leaf(&target);
             if !v.ok {
                 last_err = v.detail;
+                repair_from = code; // patch THIS broken source (the error refers to it)
                 continue;
             }
             // Behavioural auto-repair: if this leaf is a program ENTRY (Rust crate root with
             // `fn main`, or a runnable `.py` script) and carries accept cases, don't just
-            // syntax-check it — RUN it. A behaviour mismatch (e.g. the args[0] leak) feeds the
-            // diff back through repair_prompt so the model fixes it itself, instead of
-            // converging on a wrong program. For Rust this builds the binary (rustc resolves
-            // any `mod` siblings from disk, driven earlier as deps); for Python it execs the
-            // script. The runner abstraction keeps this branch language-agnostic.
+            // syntax-check it — RUN it. A behaviour mismatch feeds the input→expected/got diff
+            // back so the model patches the actual bug. We score by cases-passing and keep the
+            // best attempt, so a retry that regresses is discarded rather than driven on.
             if !accept.is_empty() && is_program_root(&code, &target) {
                 match verify::program_runner(&target) {
                     Ok(Some(runner)) => {
-                        if let Err(detail) = verify::run_accept(&runner, &accept) {
-                            last_err = detail;
-                            continue;
+                        let (np, fail) = verify::run_accept_count(&runner, &accept);
+                        match fail {
+                            None => { /* all cases pass → done */ }
+                            Some(detail) => {
+                                let score = np as i32;
+                                if score > best_score {
+                                    best_score = score;
+                                    best_code = code.clone();
+                                    repair_from = code;
+                                    last_err = format!(
+                                        "{detail}\n(passes {np}/{n_cases} cases — fix the failing one WITHOUT breaking the others)"
+                                    );
+                                } else {
+                                    // No improvement (or a regression): restore the best version
+                                    // to disk and repair from IT, not from this worse attempt.
+                                    let _ = std::fs::write(&target, &best_code);
+                                    repair_from = best_code.clone();
+                                    last_err = format!(
+                                        "{detail}\nyour change did NOT help ({np}/{n_cases} vs best {best_score}/{n_cases}). \
+                                         Here is your best version again — change ONLY what's needed to fix the failing case, keep the rest."
+                                    );
+                                }
+                                continue;
+                            }
                         }
                     }
                     Ok(None) => {}
                     Err(detail) => {
                         last_err = detail;
+                        repair_from = code;
                         continue;
                     }
                 }
@@ -261,18 +291,23 @@ pub(crate) fn scoped_prompt(task: &str, target: &Path) -> String {
     )
 }
 
-/// Bounded-replan local patch (T74): re-dispatch with the verbatim verify error so
-/// the model fixes its own leaf instead of the harness halting on the first miss.
-fn repair_prompt(task: &str, target: &Path, err: &str) -> String {
+/// Bounded-replan local PATCH (T74): re-dispatch with the model's OWN previous code plus
+/// the verbatim failure, so it fixes that specific bug instead of regenerating from scratch
+/// (which thrashes — a new, differently-broken program each retry). The behavioural error
+/// is an input→expected/got diff, so the model can see exactly which case is wrong.
+fn repair_prompt(task: &str, target: &Path, prev_code: &str, err: &str) -> String {
     let (lang, fence, requirement) = leaf_lang(target);
     format!(
-        "Your previous attempt at this leaf did NOT pass the build check. Fix it.\n\n\
+        "Your previous attempt at this leaf did NOT pass. Make the SMALLEST change that fixes \
+         it — do not rewrite from scratch, keep everything that already works.\n\n\
          TASK: {task}\n\
          TARGET FILE: {file}\n\n\
-         error:\n{err}\n\n\
+         YOUR PREVIOUS CODE:\n```{fence}\n{prev}\n```\n\n\
+         WHAT WENT WRONG:\n{err}\n\n\
          Output ONLY the corrected complete {lang} source in a single ```{fence} fenced \
          block. No prose. {requirement}",
         file = target.display(),
+        prev = prev_code.trim(),
         err = err.trim()
     )
 }

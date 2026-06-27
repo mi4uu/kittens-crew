@@ -187,34 +187,55 @@ pub fn build_binary(written: &[std::path::PathBuf]) -> Result<Option<std::path::
 /// (e.g. `[bin]` for Rust, `[python3, script.py]` for Python). Each case's args are
 /// appended to it, so this stays language-agnostic: it just runs `runner ++ case.args`.
 pub fn run_accept(runner: &[String], cases: &[crate::store::AcceptCase]) -> Result<(), String> {
+    let (passed, first_fail) = run_accept_count(runner, cases);
+    match first_fail {
+        Some(detail) if passed < cases.len() => Err(detail),
+        _ => Ok(()),
+    }
+}
+
+/// Scored variant of [`run_accept`]: runs EVERY case (doesn't stop at the first miss)
+/// and returns `(how many passed, first failure detail)`. The count is what lets the
+/// repair loop KEEP-BEST — only repair from an attempt that didn't regress — instead of
+/// thrashing (each retry a different broken program). The detail is the behavioural diff
+/// (`input → expected X, got Y`) fed back to the model so it patches the actual bug.
+pub fn run_accept_count(
+    runner: &[String],
+    cases: &[crate::store::AcceptCase],
+) -> (usize, Option<String>) {
     let Some((prog, prefix)) = runner.split_first() else {
-        return Err("empty runner argv".into());
+        return (0, Some("empty runner argv".into()));
     };
-    // A human-readable label for error messages: the last argv element is the program
-    // (binary path for Rust, script path for Python) — its basename is what the user knows.
     let label = std::path::Path::new(runner.last().map(String::as_str).unwrap_or("prog"))
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("prog")
         .to_string();
+    let mut passed = 0usize;
+    let mut first_fail = None;
     for c in cases {
-        let out = Command::new(prog)
-            .args(prefix)
-            .args(&c.args)
-            .output()
-            .map_err(|e| format!("could not run {}: {e}", runner.join(" ")))?;
-        let got = String::from_utf8_lossy(&out.stdout);
-        if got.trim() != c.stdout.trim() {
-            return Err(format!(
-                "accept case `{} {}` — expected `{}`, got `{}`",
+        let got = match Command::new(prog).args(prefix).args(&c.args).output() {
+            Ok(out) => String::from_utf8_lossy(&out.stdout).into_owned(),
+            Err(e) => {
+                if first_fail.is_none() {
+                    first_fail = Some(format!("could not run {}: {e}", runner.join(" ")));
+                }
+                continue;
+            }
+        };
+        if got.trim() == c.stdout.trim() {
+            passed += 1;
+        } else if first_fail.is_none() {
+            first_fail = Some(format!(
+                "running `{} {}` printed `{}` but should print `{}`",
                 label,
                 c.args.join(" "),
-                c.stdout.trim(),
-                got.trim()
+                got.trim(),
+                c.stdout.trim()
             ));
         }
     }
-    Ok(())
+    (passed, first_fail)
 }
 
 #[cfg(test)]
@@ -273,8 +294,8 @@ mod tests {
         assert!(run_accept(&runner, &good).is_ok());
         let rev = vec![AcceptCase { args: vec!["a".into(), "b".into()], stdout: "b a".into() }];
         let err = run_accept(&runner, &rev).unwrap_err();
-        assert!(err.contains("expected `b a`"), "got {err}");
-        assert!(err.contains("got `a b`"), "got {err}");
+        assert!(err.contains("should print `b a`"), "got {err}");
+        assert!(err.contains("printed `a b`"), "got {err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -362,7 +383,7 @@ mod tests {
         let good = vec![AcceptCase { args: vec!["a".into(), "b".into(), "c".into()], stdout: "c b a".into() }];
         assert!(run_accept(&runner, &good).is_ok());
         let bad = vec![AcceptCase { args: vec!["a".into(), "b".into()], stdout: "a b".into() }];
-        assert!(run_accept(&runner, &bad).unwrap_err().contains("expected `a b`"));
+        assert!(run_accept(&runner, &bad).unwrap_err().contains("should print `a b`"));
         let _ = std::fs::remove_file(p);
     }
 }
