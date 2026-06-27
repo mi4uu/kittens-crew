@@ -67,6 +67,11 @@ pub enum Cmd {
         /// Bounded replan (T74): retries per node, feeding the rustc error back.
         #[arg(long, default_value_t = 2)]
         max_retries: u32,
+        /// Wall escalation: model id to hand a stuck node to after the primary exhausts its
+        /// retries (the "bigger model"). Endpoint defaults to Codestral; override with
+        /// KITTENSCREW_ESCALATE_BASE_URL / _API_KEY. Omit → no escalation.
+        #[arg(long)]
+        escalate_model: Option<String>,
     },
     /// A/B benchmark (T75): bare-baseline vs kittenscrew on the SAME model/store,
     /// k trials each — reports the delta that is the harness's actual weight.

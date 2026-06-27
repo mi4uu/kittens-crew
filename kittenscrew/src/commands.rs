@@ -35,7 +35,11 @@ pub(crate) fn run(cli: Cli) -> Result<(), KittenError> {
             rollback_on_fail,
             max_iters,
             max_retries,
-        } => run_cmd(store, driver, model, parallel, yolo, budget, rollback_on_fail, max_iters, max_retries),
+            escalate_model,
+        } => run_cmd(
+            store, driver, model, parallel, yolo, budget, rollback_on_fail, max_iters, max_retries,
+            escalate_model,
+        ),
         Cmd::Bench {
             store,
             k,
@@ -827,18 +831,37 @@ fn run_cmd(
     rollback_on_fail: bool,
     max_iters: u32,
     max_retries: u32,
+    escalate_model: Option<String>,
 ) -> Result<(), KittenError> {
     use crate::driver::api::{Driver, HttpDriver, RigDriver};
     use crate::driver::delegation::drive_parallel;
     use crate::driver::drive::{drive, DriveOpts, Outcome};
 
     let k = kitty::lookup("builder").expect("builder kitty");
+
+    // Escalation (the "bigger model" for a wall node): when --escalate-model is set, build a
+    // SECOND driver pointed at its own endpoint. It defaults to Codestral, but
+    // KITTENSCREW_ESCALATE_BASE_URL / _API_KEY let it target any OpenAI-compatible endpoint —
+    // so the primary can be a small local model (LM Studio) and the escalation a stronger one.
+    let escalation: Option<Box<dyn Driver>> = match &escalate_model {
+        Some(em) => {
+            let base = std::env::var("KITTENSCREW_ESCALATE_BASE_URL")
+                .unwrap_or_else(|_| "https://codestral.mistral.ai/v1".into());
+            let key = std::env::var("KITTENSCREW_ESCALATE_API_KEY")
+                .or_else(|_| std::env::var("CODESTRAL_API_KEY"))
+                .unwrap_or_else(|_| "x".into());
+            Some(Box::new(HttpDriver::openai(&base, em.clone(), key)))
+        }
+        None => None,
+    };
+
     let opts = DriveOpts {
         max_iters,
         max_retries,
         store_path: store.unwrap_or_else(|| std::path::PathBuf::from(store::STORE_PATH)),
         // Safe by default (T90): confine all scope writes to the project dir and below.
         workspace_root: Some(std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))),
+        escalation,
     };
 
     // P1.5 safety net: snapshot the working tree before driving so a halted run can be undone.

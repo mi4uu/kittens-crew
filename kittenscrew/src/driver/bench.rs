@@ -138,6 +138,7 @@ fn run_harness(
             store_path: store_path.clone(),
             // No confinement: the bench materialises scopes in an isolated temp dir it owns.
             workspace_root: None,
+            escalation: None,
         },
         |_, _| {},
     )?;

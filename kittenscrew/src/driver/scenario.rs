@@ -81,6 +81,7 @@ pub fn run<D: Driver>(
             max_retries: sc.max_retries,
             store_path: sc.store_path.clone(),
             workspace_root: None,
+            escalation: None,
         },
         |id, _| actual_order.push(id.to_string()),
     )?;

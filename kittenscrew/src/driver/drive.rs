@@ -24,6 +24,13 @@ pub struct DriveOpts {
     /// before the model is even called. `None` = no confinement (e.g. the A/B bench,
     /// which materialises scopes in an isolated temp dir it owns).
     pub workspace_root: Option<PathBuf>,
+    /// Escalation driver (the "bigger model"): when the PRIMARY driver exhausts its
+    /// bounded repair budget on a node without converging — the deterministic WALL signal
+    /// (the local model is stuck, not making progress) — the node is re-driven with this
+    /// stronger model, seeded with the best local attempt + its failure so it patches
+    /// rather than restarts. `None` = no escalation (the local model's ceiling is the run's
+    /// ceiling). This is "cheap local model does 80%, strong model only finishes the wall".
+    pub escalation: Option<Box<dyn Driver>>,
 }
 
 #[derive(Debug)]
@@ -160,92 +167,54 @@ pub fn drive(
             let _ = std::fs::create_dir_all(parent);
         }
 
-        // Fill the leaf, then verify (T63). On a failed verify, escalate through
-        // bounded replan (T74): retry feeding the rustc error back as a local patch,
-        // up to `max_retries`. Full replan (planner re-derives the subgraph) is later.
-        let mut last_err = String::new();
-        let mut model = String::new();
-        let mut passed = false;
-        // Keep-best (anti-thrash): the repair loop used to re-prompt from scratch each time,
-        // so a model beyond its depth produced a DIFFERENT broken program every retry (even
-        // regressing parts that already worked). Now we (a) show the model its OWN previous
-        // code to PATCH, and (b) score each attempt by accept-cases-passing and never repair
-        // from a regression — we restore the best-so-far and ask only for the remaining fix.
-        let mut repair_from = String::new(); // the code we hand back for the model to patch
-        let mut best_code = String::new(); // highest-scoring compiling attempt so far
-        let mut best_score: i32 = -1; // -1 = nothing has compiled yet; else #accept cases passing
-        let n_cases = accept.len();
-        for attempt in 0..=opts.max_retries {
-            let prompt = if attempt == 0 {
-                scoped_prompt(&task, &target)
-            } else {
-                repair_prompt(&task, &target, &repair_from, &last_err)
-            };
-            let res = driver
-                .dispatch(&Turn { prompt })
-                .map_err(|e| format!("{id}: dispatch: {e}"))?;
-            let code = extract_code(&res.text);
-            // An empty (or whitespace-only) leaf compiles fine as an empty lib crate — a
-            // FALSE green that converges on a program with no code. Treat it as a failed
-            // attempt so the retry/repair loop re-prompts instead of marking it done.
-            if code.trim().is_empty() {
-                last_err = "model returned no code (empty output)".into();
-                continue;
-            }
-            std::fs::write(&target, &code)
-                .map_err(|e| format!("{id}: write {}: {e}", target.display()))?;
-            let v = verify::check_leaf(&target);
-            if !v.ok {
-                last_err = v.detail;
-                repair_from = code; // patch THIS broken source (the error refers to it)
-                continue;
-            }
-            // Behavioural auto-repair: if this leaf is a program ENTRY (Rust crate root with
-            // `fn main`, or a runnable `.py` script) and carries accept cases, don't just
-            // syntax-check it — RUN it. A behaviour mismatch feeds the input→expected/got diff
-            // back so the model patches the actual bug. We score by cases-passing and keep the
-            // best attempt, so a retry that regresses is discarded rather than driven on.
-            if !accept.is_empty() && is_program_root(&code, &target) {
-                match verify::program_runner(&target) {
-                    Ok(Some(runner)) => {
-                        let (np, fail) = verify::run_accept_count(&runner, &accept);
-                        match fail {
-                            None => { /* all cases pass → done */ }
-                            Some(detail) => {
-                                let score = np as i32;
-                                if score > best_score {
-                                    best_score = score;
-                                    best_code = code.clone();
-                                    repair_from = code;
-                                    last_err = format!(
-                                        "{detail}\n(passes {np}/{n_cases} cases — fix the failing one WITHOUT breaking the others)"
-                                    );
-                                } else {
-                                    // No improvement (or a regression): restore the best version
-                                    // to disk and repair from IT, not from this worse attempt.
-                                    let _ = std::fs::write(&target, &best_code);
-                                    repair_from = best_code.clone();
-                                    last_err = format!(
-                                        "{detail}\nyour change did NOT help ({np}/{n_cases} vs best {best_score}/{n_cases}). \
-                                         Here is your best version again — change ONLY what's needed to fix the failing case, keep the rest."
-                                    );
-                                }
-                                continue;
-                            }
-                        }
-                    }
-                    Ok(None) => {}
-                    Err(detail) => {
-                        last_err = detail;
-                        repair_from = code;
-                        continue;
-                    }
+        // Fill the leaf with the PRIMARY model (bounded keep-best repair, T74).
+        let mut filled = fill_leaf(driver, &task, &target, &accept, opts.max_retries, None)
+            .map_err(|e| format!("{id}: {e}"))?;
+
+        // WALL DETECTION → ESCALATION: the primary exhausted its whole repair budget without
+        // converging. That IS the deterministic wall signal — the local model is stuck, not
+        // improving. Hand the SAME node to the bigger model, seeded with the best local attempt
+        // and its failure so the strong model patches rather than restarts. (No escalation
+        // driver → the local ceiling is the run's ceiling, unchanged behaviour.)
+        if !filled.passed {
+            if let Some(esc) = &opts.escalation {
+                let best = filled.best_score.max(0);
+                progress(
+                    &id,
+                    &format!(
+                        "⚠ wall — {} stuck at {best}/{} after {} tries → escalating to {}",
+                        driver.model(),
+                        accept.len(),
+                        opts.max_retries + 1,
+                        esc.model()
+                    ),
+                );
+                // Put the best local attempt on disk so the strong model (and any sibling
+                // build) starts from the furthest the local model got.
+                if !filled.best_code.is_empty() {
+                    let _ = std::fs::write(&target, &filled.best_code);
+                }
+                let seed = (filled.best_code.clone(), filled.last_err.clone());
+                let esc_filled = fill_leaf(
+                    esc.as_ref(),
+                    &task,
+                    &target,
+                    &accept,
+                    opts.max_retries,
+                    Some((&seed.0, &seed.1)),
+                )
+                .map_err(|e| format!("{id} (escalated): {e}"))?;
+                if esc_filled.passed {
+                    filled = esc_filled;
+                    filled.model = format!("{} ⤴escalated", filled.model);
+                } else {
+                    filled.last_err = esc_filled.last_err;
                 }
             }
-            model = res.model;
-            passed = true;
-            break;
         }
+        let passed = filled.passed;
+        let model = filled.model;
+        let last_err = filled.last_err;
         if !passed {
             // T86: do NOT halt the whole run. Retire this node (Killed → leaves the ready
             // frontier; its transitive dependents stay blocked since its dep never goes
@@ -274,6 +243,115 @@ pub fn drive(
         done += 1;
     }
     Ok(Outcome::CapReached { done })
+}
+
+/// Outcome of filling one leaf with one driver: did it pass, which model, and — for
+/// escalation — the best partial attempt and its failure so a stronger model can take over.
+struct Filled {
+    passed: bool,
+    model: String,
+    /// The highest-scoring compiling attempt's source (left on disk when not passed).
+    best_code: String,
+    /// How many accept cases the best attempt passed (-1 = nothing compiled).
+    best_score: i32,
+    last_err: String,
+}
+
+/// Fill ONE leaf with `driver`: bounded keep-best repair (T74). The model sees only this
+/// leaf; each retry hands back its OWN previous code + the input→expected/got diff and asks
+/// for the smallest patch, and a regression is discarded (best-so-far restored). Returns the
+/// outcome plus the best partial attempt — the seam the wall-detector uses to escalate.
+///
+/// `seed = Some((code, err))` starts the loop in REPAIR mode from that code+failure instead
+/// of generating fresh — this is how the escalation (bigger) model picks up exactly where the
+/// local model got stuck, rather than starting cold.
+fn fill_leaf(
+    driver: &dyn Driver,
+    task: &str,
+    target: &Path,
+    accept: &[crate::store::AcceptCase],
+    max_retries: u32,
+    seed: Option<(&str, &str)>,
+) -> Result<Filled, String> {
+    let mut last_err = String::new();
+    let mut model = String::new();
+    let mut passed = false;
+    let mut repair_from = String::new();
+    let mut best_code = String::new();
+    let mut best_score: i32 = -1;
+    let n_cases = accept.len();
+    let seeded = seed.is_some();
+    if let Some((seed_code, seed_err)) = seed {
+        repair_from = seed_code.to_string();
+        last_err = seed_err.to_string();
+        best_code = seed_code.to_string();
+    }
+    for attempt in 0..=max_retries {
+        // A seeded run is in repair mode from the first turn (patch the local model's best).
+        let prompt = if attempt == 0 && !seeded {
+            scoped_prompt(task, target)
+        } else {
+            repair_prompt(task, target, &repair_from, &last_err)
+        };
+        let res = driver
+            .dispatch(&Turn { prompt })
+            .map_err(|e| format!("dispatch: {e}"))?;
+        let code = extract_code(&res.text);
+        // An empty leaf compiles as an empty crate — a FALSE green. Treat as a failed attempt.
+        if code.trim().is_empty() {
+            last_err = "model returned no code (empty output)".into();
+            continue;
+        }
+        std::fs::write(target, &code).map_err(|e| format!("write {}: {e}", target.display()))?;
+        let v = verify::check_leaf(target);
+        if !v.ok {
+            last_err = v.detail;
+            repair_from = code; // patch THIS broken source (the error refers to it)
+            continue;
+        }
+        // Behavioural gate: a program ENTRY (Rust `fn main` / runnable `.py`) with accept
+        // cases is RUN, not just syntax-checked. Score by cases-passing and keep the best;
+        // a retry that regresses is discarded.
+        if !accept.is_empty() && is_program_root(&code, target) {
+            match verify::program_runner(target) {
+                Ok(Some(runner)) => {
+                    let (np, fail) = verify::run_accept_count(&runner, accept);
+                    match fail {
+                        None => {}
+                        Some(detail) => {
+                            let score = np as i32;
+                            if score > best_score {
+                                best_score = score;
+                                best_code = code.clone();
+                                repair_from = code;
+                                last_err = format!(
+                                    "{detail}\n(passes {np}/{n_cases} cases — fix the failing one WITHOUT breaking the others)"
+                                );
+                            } else {
+                                let _ = std::fs::write(target, &best_code);
+                                repair_from = best_code.clone();
+                                last_err = format!(
+                                    "{detail}\nyour change did NOT help ({np}/{n_cases} vs best {best_score}/{n_cases}). \
+                                     Here is your best version again — change ONLY what's needed to fix the failing case, keep the rest."
+                                );
+                            }
+                            continue;
+                        }
+                    }
+                }
+                Ok(None) => {}
+                Err(detail) => {
+                    last_err = detail;
+                    repair_from = code;
+                    continue;
+                }
+            }
+        }
+        model = res.model;
+        passed = true;
+        break;
+    }
+    Ok(Filled { passed, model, best_code, best_score, last_err })
 }
 
 /// The whole point: the model sees ONLY this leaf, never the global plan.
@@ -488,10 +566,61 @@ mod tests {
             // workspace_root None: per-node accept still runs (it's gated on accept cases, not
             // on the sandbox); only the post-converge whole-crate gate is run-path-only.
             workspace_root: None,
+            escalation: None,
         };
         let out = drive(&driver, &opts, |_, _| {}).unwrap();
         assert!(matches!(out, Outcome::Converged { done: 1 }), "got {out:?}");
         assert_eq!(driver.n.load(Ordering::SeqCst), 2, "should have repaired once");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Wall escalation: the primary model can NEVER produce compiling code (exhausts its
+    /// whole retry budget = the wall signal), so the node is handed to the escalation model,
+    /// which solves it — the run converges instead of killing the node.
+    #[test]
+    fn wall_escalates_to_bigger_model() {
+        use crate::driver::api::{Driver, DriverError, Turn, TurnResult};
+
+        struct Weak; // never compiles, no matter how many retries
+        impl Driver for Weak {
+            fn dispatch(&self, _t: &Turn) -> Result<TurnResult, DriverError> {
+                Ok(TurnResult { text: "```rust\nfn x( {}\n```".into(), model: "weak".into() })
+            }
+            fn model(&self) -> &str { "weak" }
+        }
+        struct Strong; // the bigger model — produces valid code
+        impl Driver for Strong {
+            fn dispatch(&self, _t: &Turn) -> Result<TurnResult, DriverError> {
+                Ok(TurnResult { text: "```rust\npub fn x() -> i64 { 1 }\n```".into(), model: "strong".into() })
+            }
+            fn model(&self) -> &str { "strong" }
+        }
+
+        let dir = std::env::temp_dir().join(format!("ks_escal_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let store_path = dir.join("spec.toml");
+        let out_rs = dir.join("x.rs");
+        let spec = format!(
+            "schema = 1\n\n[[task]]\nid = \"T1\"\nstatus = \"todo\"\ntask = \"x\"\ndeps = []\npriority = 1\nscope = [{:?}]\n",
+            out_rs.to_str().unwrap()
+        );
+
+        // No escalation → the wall kills the node (Halted).
+        std::fs::write(&store_path, &spec).unwrap();
+        let opts_no = DriveOpts {
+            max_iters: 3, max_retries: 1, store_path: store_path.clone(),
+            workspace_root: None, escalation: None,
+        };
+        assert!(matches!(drive(&Weak, &opts_no, |_, _| {}).unwrap(), Outcome::Halted { .. }));
+
+        // With escalation → the bigger model finishes the wall node, run converges.
+        std::fs::write(&store_path, &spec).unwrap();
+        let opts = DriveOpts {
+            max_iters: 3, max_retries: 1, store_path: store_path.clone(),
+            workspace_root: None, escalation: Some(Box::new(Strong)),
+        };
+        let out = drive(&Weak, &opts, |_, _| {}).unwrap();
+        assert!(matches!(out, Outcome::Converged { done: 1 }), "got {out:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -544,6 +673,7 @@ mod tests {
             max_retries: 2,
             store_path: store_path.clone(),
             workspace_root: None,
+            escalation: None,
         };
         let out = drive(&driver, &opts, |_, _| {}).unwrap();
         assert!(matches!(out, Outcome::Converged { done: 1 }), "got {out:?}");
@@ -593,7 +723,7 @@ mod tests {
         )
         .unwrap();
 
-        let opts = DriveOpts { max_iters: 10, max_retries: 1, store_path: store_path.clone(), workspace_root: None };
+        let opts = DriveOpts { max_iters: 10, max_retries: 1, store_path: store_path.clone(), workspace_root: None , escalation: None };
         let out = drive(&PartlyBroken, &opts, |_, _| {}).unwrap();
 
         match out {
@@ -642,6 +772,7 @@ mod tests {
             max_retries: 0,
             store_path: store_path.clone(),
             workspace_root: Some(root.clone()),
+            escalation: None,
         };
         let out = drive(&Any, &opts, |_, _| {}).unwrap();
 
