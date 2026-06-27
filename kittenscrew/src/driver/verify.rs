@@ -24,7 +24,7 @@ pub fn rustc_compiles(file: &Path) -> Verdict {
     let stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("node");
     let meta = std::env::temp_dir().join(format!("ks_meta_{}_{}.rmeta", std::process::id(), stem));
     let out = Command::new("rustc")
-        .args(["--edition", "2021", "--crate-type", "lib", "--emit=metadata", "-o"])
+        .args(["--edition", "2024", "--crate-type", "lib", "--emit=metadata", "-o"])
         .arg(&meta)
         .arg(file)
         .output();
@@ -165,7 +165,7 @@ pub fn build_binary(written: &[std::path::PathBuf]) -> Result<Option<std::path::
     // single-file program lands as `./<stem>` exactly where the user expects it.
     let bin = root.with_file_name(stem);
     let out = Command::new("rustc")
-        .args(["--edition", "2021", "-o"])
+        .args(["--edition", "2024", "-o"])
         .arg(&bin)
         .arg(root)
         .output()
