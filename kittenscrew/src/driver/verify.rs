@@ -214,11 +214,14 @@ pub fn run_accept_count(
     let mut passed = 0usize;
     let mut first_fail = None;
     for c in cases {
-        let got = match Command::new(prog).args(prefix).args(&c.args).output() {
-            Ok(out) => String::from_utf8_lossy(&out.stdout).into_owned(),
+        let got = match run_capped(prog, prefix, &c.args, std::time::Duration::from_secs(5)) {
+            Ok(out) => out,
             Err(e) => {
+                // A timeout is a real failure mode (a model that writes an infinite loop —
+                // e.g. a parser whose `while let Some(op) = peek()` never advances). Report it
+                // as the behavioural failure so the repair loop fixes the loop, not as a hang.
                 if first_fail.is_none() {
-                    first_fail = Some(format!("could not run {}: {e}", runner.join(" ")));
+                    first_fail = Some(format!("running `{} {}` {e}", label, c.args.join(" ")));
                 }
                 continue;
             }
@@ -236,6 +239,52 @@ pub fn run_accept_count(
         }
     }
     (passed, first_fail)
+}
+
+/// Run a program with a wall-clock CAP and capture stdout. Plain `Command::output()` blocks
+/// forever if the program never exits, so an accept case against a model-written infinite loop
+/// would hang the whole harness. We spawn, read stdout on a thread, poll for exit until the
+/// deadline, and KILL on timeout — turning a hang into a deterministic failure the repair loop
+/// can act on. `Err` = the program didn't exit in time (or couldn't be spawned).
+fn run_capped(
+    prog: &str,
+    prefix: &[String],
+    args: &[String],
+    cap: std::time::Duration,
+) -> Result<String, String> {
+    use std::io::Read;
+    use std::process::Stdio;
+    let mut child = Command::new(prog)
+        .args(prefix)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("could not start: {e}"))?;
+    // Drain stdout on a thread so a program that fills the pipe buffer can't deadlock.
+    let mut out = child.stdout.take().unwrap();
+    let reader = std::thread::spawn(move || {
+        let mut s = String::new();
+        let _ = out.read_to_string(&mut s);
+        s
+    });
+    let deadline = std::time::Instant::now() + cap;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    let _ = reader.join();
+                    return Err(format!("timed out after {}s (infinite loop?)", cap.as_secs()));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(e) => return Err(format!("wait failed: {e}")),
+        }
+    }
+    Ok(reader.join().unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -271,6 +320,25 @@ mod tests {
         let bin = build_binary(&[helper.clone(), main.clone()]).unwrap();
         assert!(bin.is_some(), "expected a binary");
         assert!(bin.unwrap().exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An infinite-loop program must not hang the harness: run_accept_count caps each run
+    /// and reports a timeout as a failure (not a hang). Mirrors the live Q6 finding where a
+    /// model wrote a parser whose `while let Some(op) = peek()` never advanced.
+    #[test]
+    fn run_accept_times_out_infinite_loop() {
+        use crate::store::AcceptCase;
+        let dir = std::env::temp_dir().join(format!("ks_to_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let main = dir.join("main.rs");
+        std::fs::write(&main, "fn main(){ loop {} }\n").unwrap();
+        let bin = build_binary(&[main.clone()]).unwrap().unwrap();
+        let runner = vec![bin.to_string_lossy().into_owned()];
+        let cases = vec![AcceptCase { args: vec![], stdout: "x".into() }];
+        let (passed, fail) = run_accept_count(&runner, &cases);
+        assert_eq!(passed, 0);
+        assert!(fail.unwrap().contains("timed out"), "should report a timeout");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
