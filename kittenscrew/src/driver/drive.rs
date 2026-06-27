@@ -249,32 +249,54 @@ pub fn drive(
 /// The whole point: the model sees ONLY this leaf, never the global plan.
 /// `pub(crate)` so the A/B bench (T75) gives both arms the identical prompt.
 pub(crate) fn scoped_prompt(task: &str, target: &Path) -> String {
+    let (lang, fence, requirement) = leaf_lang(target);
     format!(
         "You are filling ONE leaf of a build plan. Do EXACTLY this node — nothing more, \
          no extra files, no scaffolding.\n\n\
          TASK: {task}\n\
          TARGET FILE: {file}\n\n\
-         Output ONLY the complete Rust source for that file, in a single ```rust fenced \
-         block. No prose. It must compile as a library crate (`rustc --crate-type lib`), \
-         with no external dependencies.",
+         Output ONLY the complete {lang} source for that file, in a single ```{fence} fenced \
+         block. No prose. {requirement}",
         file = target.display()
     )
 }
 
-/// Bounded-replan local patch (T74): re-dispatch with the verbatim rustc error so
+/// Bounded-replan local patch (T74): re-dispatch with the verbatim verify error so
 /// the model fixes its own leaf instead of the harness halting on the first miss.
 fn repair_prompt(task: &str, target: &Path, err: &str) -> String {
+    let (lang, fence, requirement) = leaf_lang(target);
     format!(
-        "Your previous attempt at this leaf did NOT compile. Fix it.\n\n\
+        "Your previous attempt at this leaf did NOT pass the build check. Fix it.\n\n\
          TASK: {task}\n\
          TARGET FILE: {file}\n\n\
-         rustc error:\n{err}\n\n\
-         Output ONLY the corrected complete Rust source in a single ```rust fenced \
-         block. No prose. It must compile as a library crate with no external \
-         dependencies.",
+         error:\n{err}\n\n\
+         Output ONLY the corrected complete {lang} source in a single ```{fence} fenced \
+         block. No prose. {requirement}",
         file = target.display(),
         err = err.trim()
     )
+}
+
+/// The per-leaf build prompt must match the leaf's LANGUAGE — the planner already
+/// scoped a concrete `.rs`/`.py` path, so the extension picks the language, the fence
+/// tag, and the "what counts as buildable" requirement the verify gate will enforce.
+/// (Bug fix: this was hardcoded to Rust, so a `--lang python` plan got a Rust prompt and
+/// the model wrote Rust into `main.py`, failing `py_compile`.)
+fn leaf_lang(target: &Path) -> (&'static str, &'static str, &'static str) {
+    match target.extension().and_then(|e| e.to_str()) {
+        Some("py") => (
+            "Python 3",
+            "python",
+            "It must run with `python3` using only the standard library (no pip packages). \
+             Read CLI arguments from `sys.argv` and print the result to stdout.",
+        ),
+        _ => (
+            "Rust",
+            "rust",
+            "It must compile as a library crate (`rustc --crate-type lib`) with no external \
+             dependencies — unless this leaf is the program entry, in which case it has `fn main`.",
+        ),
+    }
 }
 
 /// Pull the first ```fenced``` block; fall back to the whole text if unfenced.
