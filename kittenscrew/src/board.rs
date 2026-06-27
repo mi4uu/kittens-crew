@@ -124,18 +124,32 @@ pub fn verdict(opinions: &[Opinion], topic: &str) -> Option<Verdict> {
 /// that type-checks. Returns a reject reason if it smells one, else `None` (approve).
 ///
 /// Kept to cheap, certain signals (no model, no false positives on real code):
-/// `todo!`/`unimplemented!`/`unreachable!` macros and a bare `panic!(...)` body are
-/// the classic "I gave up but it compiles" markers. This is intentionally narrow —
-/// it can grow teeth (a model critic) later, but a deterministic smell never lies.
+/// Rust's `todo!`/`unimplemented!`/`unreachable!` macros and Python's
+/// `raise NotImplementedError` are the classic "I gave up but it compiles/parses"
+/// markers. This is intentionally narrow — it can grow teeth (a model critic) later,
+/// but a deterministic smell never lies.
+///
+/// WHY substring-match the Rust markers but LINE-match the Python ones: `pass` and `...`
+/// are real Python tokens (a legitimate `except: pass`, a slice `a[...]`), so matching
+/// them as substrings would false-positive on working code. We only flag a body that is
+/// ITSELF nothing but `pass` / `...` — a whole stub line — never an occurrence inside
+/// real logic.
 pub fn grill_smells(code: &str) -> Option<String> {
     for (needle, why) in [
         ("todo!", "contains a `todo!()` — the leaf is a stub, not a delivery"),
         ("unimplemented!", "contains `unimplemented!()` — not actually built"),
         ("unreachable!", "contains `unreachable!()` — a placeholder branch"),
+        ("raise NotImplementedError", "raises NotImplementedError — a Python stub, not a delivery"),
     ] {
         if code.contains(needle) {
             return Some(why.to_string());
         }
+    }
+    // A function/class body that is ONLY `pass` or a bare `...` ellipsis (the whole logical
+    // line, ignoring indentation) is an empty placeholder. Requiring the line to be EXACTLY
+    // the stub token avoids flagging `except Foo: pass` or a `[...]` slice in real code.
+    if code.lines().any(|l| matches!(l.trim(), "pass" | "...")) {
+        return Some("body is only `pass`/`...` — an empty Python stub".to_string());
     }
     None
 }
@@ -270,6 +284,13 @@ mod tests {
         assert!(grill_smells("fn f() -> i64 { 1 + 2 }").is_none());
         // A real implementation that merely mentions the word "panic" in a comment is fine.
         assert!(grill_smells("// no panic here\nfn f() -> i64 { 0 }").is_none());
+        // Python stub forms.
+        assert!(grill_smells("def f():\n    raise NotImplementedError\n").is_some());
+        assert!(grill_smells("def f():\n    pass\n").is_some());
+        assert!(grill_smells("def f():\n    ...\n").is_some());
+        // Real Python must NOT false-positive: `pass` inside an except, `...` in a slice.
+        assert!(grill_smells("def f(a):\n    try:\n        return a[1:]\n    except Exception:\n        return []\n").is_none());
+        assert!(grill_smells("def f(a):\n    return a[...]\n").is_none());
     }
 
     #[test]

@@ -63,20 +63,39 @@ pub fn drive(
                 // A failed whole-crate build is a real Halt: green leaves, but the program
                 // the user described does NOT run.
                 if failed.is_empty() && opts.workspace_root.is_some() {
-                    match verify::build_binary(&written) {
-                        Ok(Some(bin)) => {
-                            progress("·crate", &format!("✓ built {}", bin.display()));
+                    // Find the program ENTRY among the written leaves and run it. For Rust this
+                    // builds the multi-file binary (the program root = the leaf with `fn main`,
+                    // which pulls in its `mod` siblings); for Python it's the runnable script
+                    // (`python3 root.py`). `program_runner` returns `Ok(None)` for a pure
+                    // library/module — nothing to assemble, not an error (today's behaviour).
+                    let entry = written.iter().find(|p| {
+                        matches!(verify::program_runner(p), Ok(Some(_)))
+                    });
+                    let runner = match entry {
+                        Some(root) => verify::program_runner(root),
+                        None => Ok(None),
+                    };
+                    match runner {
+                        Ok(Some(runner)) => {
+                            let prog = runner.last().cloned().unwrap_or_default();
+                            // Rust yields a built binary; Python a `python3 <script>` argv. Narrate
+                            // the right verb so the run log reads honestly for either language.
+                            if runner.first().map(String::as_str) == Some("python3") {
+                                progress("·crate", &format!("✓ runnable {prog}"));
+                            } else {
+                                progress("·crate", &format!("✓ built {prog}"));
+                            }
                             // Behavioural gate: a program must also DO what was asked, not just
-                            // compile. Run every task's accept cases against the binary.
+                            // parse. Run every task's accept cases against the program.
                             let cases: Vec<_> = store
                                 .tasks
                                 .iter()
                                 .flat_map(|t| t.accept.iter().cloned())
                                 .collect();
-                            if let Err(detail) = verify::run_accept(&bin, &cases) {
+                            if let Err(detail) = verify::run_accept(&runner, &cases) {
                                 return Ok(Outcome::Halted {
                                     node: "·crate".into(),
-                                    reason: format!("built but behaviour wrong: {}", first_line(&detail)),
+                                    reason: format!("runs but behaviour wrong: {}", first_line(&detail)),
                                     done,
                                 });
                             }
@@ -88,7 +107,7 @@ pub fn drive(
                         Err(detail) => {
                             return Ok(Outcome::Halted {
                                 node: "·crate".into(),
-                                reason: format!("whole-crate build failed: {}", first_line(&detail)),
+                                reason: format!("whole-program build failed: {}", first_line(&detail)),
                                 done,
                             });
                         }
@@ -166,20 +185,22 @@ pub fn drive(
             }
             std::fs::write(&target, &code)
                 .map_err(|e| format!("{id}: write {}: {e}", target.display()))?;
-            let v = verify::rustc_compiles(&target);
+            let v = verify::check_leaf(&target);
             if !v.ok {
                 last_err = v.detail;
                 continue;
             }
-            // Behavioural auto-repair: if this leaf is a program crate root (has `fn main`)
-            // and carries accept cases, don't just type-check it — BUILD and run it. A
-            // behaviour mismatch (e.g. the args[0] leak) feeds the diff back through
-            // repair_prompt so the model fixes it itself, instead of converging on a wrong
-            // program. rustc resolves any `mod` siblings from disk (driven earlier as deps).
-            if !accept.is_empty() && code.contains("fn main") {
-                match verify::build_binary(std::slice::from_ref(&target)) {
-                    Ok(Some(bin)) => {
-                        if let Err(detail) = verify::run_accept(&bin, &accept) {
+            // Behavioural auto-repair: if this leaf is a program ENTRY (Rust crate root with
+            // `fn main`, or a runnable `.py` script) and carries accept cases, don't just
+            // syntax-check it — RUN it. A behaviour mismatch (e.g. the args[0] leak) feeds the
+            // diff back through repair_prompt so the model fixes it itself, instead of
+            // converging on a wrong program. For Rust this builds the binary (rustc resolves
+            // any `mod` siblings from disk, driven earlier as deps); for Python it execs the
+            // script. The runner abstraction keeps this branch language-agnostic.
+            if !accept.is_empty() && is_program_root(&code, &target) {
+                match verify::program_runner(&target) {
+                    Ok(Some(runner)) => {
+                        if let Err(detail) = verify::run_accept(&runner, &accept) {
                             last_err = detail;
                             continue;
                         }
@@ -267,6 +288,17 @@ pub(crate) fn extract_code(text: &str) -> String {
         }
     }
     text.trim().to_string()
+}
+
+/// Language-aware "is this leaf the program ENTRY?" — the cheap content check that gates
+/// the per-node behavioural run (so we don't try to exec a pure library/module). Mirrors
+/// `verify::program_runner`'s own entry test, but works off the in-memory `code` we just
+/// wrote (no extra disk read). Rust: a `fn main`. Python: a runnable script signal.
+fn is_program_root(code: &str, target: &Path) -> bool {
+    match target.extension().and_then(|e| e.to_str()) {
+        Some("py") => verify::is_python_program(code),
+        _ => code.contains("fn main"),
+    }
 }
 
 fn first_line(s: &str) -> &str {

@@ -45,6 +45,101 @@ pub fn rustc_compiles(file: &Path) -> Verdict {
     }
 }
 
+/// Language-aware per-node check (the multi-language seam): which deterministic
+/// "is this leaf well-formed?" gate to run depends ONLY on the file extension, so a
+/// `.py` leaf gets a Python syntax check and a `.rs` leaf gets the rustc gate — without
+/// the drive loop having to know any language details. WHY extension-keyed: the planner
+/// already scopes one concrete path per leaf, so the path itself is the cheapest, most
+/// reliable language signal (no content sniffing, no guessing).
+///
+///   - `.py`  → `python3 -m py_compile <path>` (byte-compiles to AST; exit 0 = syntax ok).
+///   - `.rs`  → the existing `rustc_compiles` lib gate.
+///   - other  → fall back to `rustc_compiles` (today's behaviour, unchanged).
+pub fn check_leaf(path: &Path) -> Verdict {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("py") => py_compiles(path),
+        _ => rustc_compiles(path),
+    }
+}
+
+/// Python's analogue of `rustc_compiles`: byte-compile the script with the stdlib's
+/// `py_compile` module. Exit 0 = the file parses (the thinnest honest "it's not garbage"
+/// gate for a script, mirroring rustc's metadata-only type-check). A non-zero exit carries
+/// the SyntaxError on stderr, which the repair loop feeds back verbatim.
+fn py_compiles(file: &Path) -> Verdict {
+    let out = Command::new("python3")
+        .args(["-m", "py_compile"])
+        .arg(file)
+        .output();
+    match out {
+        Ok(o) if o.status.success() => Verdict {
+            ok: true,
+            detail: "py-compiles".into(),
+        },
+        Ok(o) => Verdict {
+            ok: false,
+            detail: String::from_utf8_lossy(&o.stderr).into_owned(),
+        },
+        Err(e) => Verdict {
+            ok: false,
+            detail: format!("python3 spawn failed: {e}"),
+        },
+    }
+}
+
+/// The language-aware "how do I RUN this program?" seam. Returns the argv PREFIX that
+/// executes the program root — the command + any leading args — so the behavioural
+/// `run_accept` gate can append each case's args and diff stdout, regardless of language.
+/// This generalises the old "build a binary, then exec it" path: a compiled language
+/// (Rust) yields the built binary's path; an interpreted one (Python) yields the
+/// interpreter + script. Returns:
+///   - `Ok(Some(argv))` — `argv` runs the program (e.g. `[bin]` or `[python3, script.py]`).
+///   - `Ok(None)`       — `root` is not a runnable program entry (a pure library/module).
+///   - `Err(detail)`    — it IS a program root but failed to build (Rust only).
+pub fn program_runner(root: &Path) -> Result<Option<Vec<String>>, String> {
+    match root.extension().and_then(|e| e.to_str()) {
+        Some("py") => py_runner(root),
+        _ => {
+            // Rust: the runner IS the freshly-built binary. Reuse build_binary so the
+            // single-file build logic stays in one place; absolutise its path so it execs
+            // from any cwd (Command treats a bare stem as a PATH lookup, not cwd-relative).
+            match build_binary(std::slice::from_ref(&root.to_path_buf()))? {
+                Some(bin) => {
+                    let bin = std::fs::canonicalize(&bin).unwrap_or(bin);
+                    Ok(Some(vec![bin.to_string_lossy().into_owned()]))
+                }
+                None => Ok(None),
+            }
+        }
+    }
+}
+
+/// Python's branch of `program_runner`: the script IS the program — no compile step —
+/// so the runner is simply `python3 <abs path>`. We treat a `.py` leaf as a runnable
+/// program root (vs a pure imported module with nothing to execute) when it has a clear
+/// entry signal: a `__main__` guard, a `sys.argv` read, or a top-level `print(`. A module
+/// with none of these has no observable stdout to accept, so it returns `Ok(None)` — the
+/// same "nothing to assemble" semantics the Rust library case has.
+fn py_runner(root: &Path) -> Result<Option<Vec<String>>, String> {
+    let code = std::fs::read_to_string(root)
+        .map_err(|e| format!("could not read {}: {e}", root.display()))?;
+    if !is_python_program(&code) {
+        return Ok(None);
+    }
+    // Absolutise so `python3 <path>` runs regardless of the harness's cwd.
+    let abs = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    Ok(Some(vec!["python3".into(), abs.to_string_lossy().into_owned()]))
+}
+
+/// Cheap, conservative "is this `.py` a runnable script?" signal — shared by `py_runner`
+/// and the drive loop's per-node program detection so the two never disagree. A
+/// `__main__` guard or a `sys.argv` read is an unambiguous program; a top-level `print(`
+/// means the script produces stdout when run. A pure helper module (only `def`/`class`,
+/// imported elsewhere) matches none → not a program root.
+pub fn is_python_program(code: &str) -> bool {
+    code.contains("__main__") || code.contains("sys.argv") || code.contains("print(")
+}
+
 /// Whole-crate verify (the multi-file ceiling fix): per-node `rustc_compiles` only
 /// type-checks each leaf as an isolated `lib`, so a plan split across files gets green
 /// leaves but never assembles into a runnable program. This is the honest final gate —
@@ -82,27 +177,37 @@ pub fn build_binary(written: &[std::path::PathBuf]) -> Result<Option<std::path::
     }
 }
 
-/// Behavioural acceptance gate: run the built binary for each case and diff its
-/// stdout (trimmed) against the expected output. This is what catches "compiles but
-/// wrong" — e.g. a reverse-words CLI that leaks `args[0]` (the binary path) compiles
-/// green but fails its own `[a,b,c] => "c b a"` case. Returns the first mismatch as a
-/// detail the repair loop can feed back to the model.
-pub fn run_accept(bin: &std::path::Path, cases: &[crate::store::AcceptCase]) -> Result<(), String> {
-    // `Command::new` treats a bare name with no separator (e.g. "main", a single-file
-    // program built at the workspace root) as a PATH lookup, not a cwd-relative file —
-    // so it fails to find the binary we just built. Absolutise so it always runs the file.
-    let bin = std::fs::canonicalize(bin).unwrap_or_else(|_| bin.to_path_buf());
-    let bin = bin.as_path();
+/// Behavioural acceptance gate: run the program for each case and diff its stdout
+/// (trimmed) against the expected output. This is what catches "compiles but wrong" —
+/// e.g. a reverse-words CLI that leaks `args[0]` (the binary path) compiles green but
+/// fails its own `[a,b,c] => "c b a"` case. Returns the first mismatch as a detail the
+/// repair loop can feed back to the model.
+///
+/// `runner` is the argv PREFIX from `program_runner` — the command plus any leading args
+/// (e.g. `[bin]` for Rust, `[python3, script.py]` for Python). Each case's args are
+/// appended to it, so this stays language-agnostic: it just runs `runner ++ case.args`.
+pub fn run_accept(runner: &[String], cases: &[crate::store::AcceptCase]) -> Result<(), String> {
+    let Some((prog, prefix)) = runner.split_first() else {
+        return Err("empty runner argv".into());
+    };
+    // A human-readable label for error messages: the last argv element is the program
+    // (binary path for Rust, script path for Python) — its basename is what the user knows.
+    let label = std::path::Path::new(runner.last().map(String::as_str).unwrap_or("prog"))
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("prog")
+        .to_string();
     for c in cases {
-        let out = Command::new(bin)
+        let out = Command::new(prog)
+            .args(prefix)
             .args(&c.args)
             .output()
-            .map_err(|e| format!("could not run {}: {e}", bin.display()))?;
+            .map_err(|e| format!("could not run {}: {e}", runner.join(" ")))?;
         let got = String::from_utf8_lossy(&out.stdout);
         if got.trim() != c.stdout.trim() {
             return Err(format!(
                 "accept case `{} {}` — expected `{}`, got `{}`",
-                bin.file_name().and_then(|s| s.to_str()).unwrap_or("prog"),
+                label,
                 c.args.join(" "),
                 c.stdout.trim(),
                 got.trim()
@@ -163,10 +268,11 @@ mod tests {
         )
         .unwrap();
         let bin = build_binary(&[main.clone()]).unwrap().unwrap();
+        let runner = vec![bin.to_string_lossy().into_owned()];
         let good = vec![AcceptCase { args: vec!["a".into(), "b".into()], stdout: "a b".into() }];
-        assert!(run_accept(&bin, &good).is_ok());
+        assert!(run_accept(&runner, &good).is_ok());
         let rev = vec![AcceptCase { args: vec!["a".into(), "b".into()], stdout: "b a".into() }];
-        let err = run_accept(&bin, &rev).unwrap_err();
+        let err = run_accept(&runner, &rev).unwrap_err();
         assert!(err.contains("expected `b a`"), "got {err}");
         assert!(err.contains("got `a b`"), "got {err}");
         let _ = std::fs::remove_dir_all(&dir);
@@ -189,6 +295,74 @@ mod tests {
         let v = rustc_compiles(&p);
         assert!(!v.ok);
         assert!(!v.detail.is_empty());
+        let _ = std::fs::remove_file(p);
+    }
+
+    /// Skip the Python tests when no interpreter is on PATH so CI without python3 still
+    /// passes (the seam is additive — its absence must never fail the Rust-only suite).
+    fn have_python3() -> bool {
+        Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
+    }
+
+    fn tmp_py(name: &str, src: &str) -> std::path::PathBuf {
+        let p = std::env::temp_dir().join(format!("ks_verify_{}_{name}.py", std::process::id()));
+        std::fs::write(&p, src).unwrap();
+        p
+    }
+
+    /// The Python analogue of `valid_rust_compiles`: a syntactically valid script passes
+    /// `check_leaf` (which dispatches `.py` → `python3 -m py_compile`).
+    #[test]
+    fn py_compiles_valid() {
+        if !have_python3() {
+            return;
+        }
+        let p = tmp_py("ok", "import sys\nprint(' '.join(sys.argv[1:]))\n");
+        assert!(check_leaf(&p).ok, "valid python must pass check_leaf");
+        let _ = std::fs::remove_file(p);
+    }
+
+    /// A broken `.py` is rejected with the SyntaxError detail (the repair loop's feedback).
+    #[test]
+    fn py_rejects_broken() {
+        if !have_python3() {
+            return;
+        }
+        let p = tmp_py("bad", "def f(:\n    pass\n");
+        let v = check_leaf(&p);
+        assert!(!v.ok, "broken python must fail check_leaf");
+        assert!(!v.detail.is_empty());
+        let _ = std::fs::remove_file(p);
+    }
+
+    /// `program_runner` for a runnable script returns the `python3 <abs path>` argv prefix
+    /// (no compile step — the script IS the program).
+    #[test]
+    fn program_runner_python_returns_python3_argv() {
+        let p = tmp_py("run", "import sys\nprint(len(sys.argv))\n");
+        let runner = program_runner(&p).unwrap().expect("script is a program root");
+        assert_eq!(runner[0], "python3");
+        assert!(runner[1].ends_with(".py"), "second argv element is the script path: {runner:?}");
+        // A pure module (no entry signal) is NOT a program root → Ok(None).
+        let lib = tmp_py("lib", "def helper():\n    return 1\n");
+        assert!(program_runner(&lib).unwrap().is_none(), "pure module is not runnable");
+        let _ = std::fs::remove_file(p);
+        let _ = std::fs::remove_file(lib);
+    }
+
+    /// End-to-end Python behavioural gate: build the runner, run an accept case, diff stdout.
+    #[test]
+    fn py_run_accept_diffs_stdout() {
+        if !have_python3() {
+            return;
+        }
+        use crate::store::AcceptCase;
+        let p = tmp_py("acc", "import sys\nprint(' '.join(reversed(sys.argv[1:])))\n");
+        let runner = program_runner(&p).unwrap().unwrap();
+        let good = vec![AcceptCase { args: vec!["a".into(), "b".into(), "c".into()], stdout: "c b a".into() }];
+        assert!(run_accept(&runner, &good).is_ok());
+        let bad = vec![AcceptCase { args: vec!["a".into(), "b".into()], stdout: "a b".into() }];
+        assert!(run_accept(&runner, &bad).unwrap_err().contains("expected `a b`"));
         let _ = std::fs::remove_file(p);
     }
 }

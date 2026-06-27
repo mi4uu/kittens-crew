@@ -242,6 +242,10 @@ pub enum SpecAction {
         /// Retries feeding validation errors back to the model before giving up.
         #[arg(long, default_value_t = 3)]
         max_retries: u32,
+        /// Target language for the plan's leaves: `rust` (default) → `.rs` files built
+        /// with rustc, or `python` → single-file `.py` scripts run with `python3`.
+        #[arg(long, default_value = "rust")]
+        lang: String,
         /// Behavioural acceptance case(s), the honest done-oracle for a program:
         /// `'<args> => <expected stdout>'` (e.g. `--accept '5 => 120'`). Repeatable.
         /// You become the oracle — `run` builds until the binary matches. More reliable

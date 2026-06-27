@@ -385,8 +385,8 @@ fn spec_cmd(action: SpecAction) -> Result<(), KittenError> {
             );
             Ok(())
         }
-        SpecAction::Gen { goal, store, model, max_retries, accept } => {
-            gen_cmd(goal, store, model, max_retries, accept)
+        SpecAction::Gen { goal, store, model, max_retries, lang, accept } => {
+            gen_cmd(goal, store, model, max_retries, lang, accept)
         }
         SpecAction::Check => {
             let s = store::Store::load(Path::new(store::STORE_PATH))?;
@@ -618,10 +618,26 @@ fn gen_cmd(
     store: Option<std::path::PathBuf>,
     model: Option<String>,
     max_retries: u32,
+    lang: String,
     accept: Vec<String>,
 ) -> Result<(), KittenError> {
     use crate::driver::api::{Driver, HttpDriver};
     use crate::driver::drive::extract_code;
+
+    // The language path is keyed off the leaf's file extension everywhere downstream;
+    // here it only steers the planner prompt (which scopes `.rs` vs `.py` leaves) and the
+    // user-accept attachment (which crate-root basename to find). Reject unknowns early so
+    // a typo doesn't silently plan Rust.
+    let lang = lang.to_lowercase();
+    let (ext, root_basename) = match lang.as_str() {
+        "rust" | "rs" => ("rs", "main.rs"),
+        "python" | "py" => ("py", "main.py"),
+        other => {
+            return Err(KittenError::Validation(format!(
+                "--lang must be `rust` or `python`, got `{other}`"
+            )))
+        }
+    };
 
     // Parse `'<args> => <expected stdout>'` into acceptance cases. Args split on whitespace.
     let user_accept = accept
@@ -657,7 +673,7 @@ fn gen_cmd(
     let k = kitty::lookup("planning").expect("planning kitty");
     let mut feedback = String::new();
     for attempt in 0..=max_retries {
-        let prompt = gen_prompt(&goal, &feedback);
+        let prompt = gen_prompt(&goal, &feedback, ext);
         let res = driver
             .dispatch(&crate::driver::api::Turn { prompt })
             .map_err(|e| KittenError::Validation(format!("model: {e}")))?;
@@ -712,7 +728,7 @@ fn gen_cmd(
             let idx = s
                 .tasks
                 .iter()
-                .position(|t| t.scope.iter().any(|p| p.ends_with("main.rs")))
+                .position(|t| t.scope.iter().any(|p| p.ends_with(root_basename)))
                 .or(s.tasks.len().checked_sub(1));
             if let Some(i) = idx {
                 s.tasks[i].accept = user_accept.clone();
@@ -742,12 +758,42 @@ fn gen_cmd(
 
 /// The planner prompt: prose goal → a JSON array of `spec apply` diffs (one §T add per
 /// code leaf). `feedback` carries the prior attempt's validation errors (empty first try).
-fn gen_prompt(goal: &str, feedback: &str) -> String {
+/// `ext` is the leaf file extension (`rs` or `py`); only the language-specific clauses
+/// change — the diff shape, ids/deps DAG rules, and the accept-cases contract are shared,
+/// so both languages drive through the exact same apply/validate/run machinery.
+fn gen_prompt(goal: &str, feedback: &str, ext: &str) -> String {
     let retry = if feedback.is_empty() {
         String::new()
     } else {
         format!("\n\nYOUR PREVIOUS ATTEMPT FAILED: {feedback}\nFix it and output the corrected array.")
     };
+    // Shared accept-cases contract — identical for both languages (the runner abstraction
+    // means "args → exact stdout" is language-agnostic).
+    let accept_clause = "ALSO add an `accept` array to its payload: 1-3 behavioural test \
+         cases proving the program does what the GOAL asks. Each case is \
+         {\"args\":[\"<cli arg>\",...],\"stdout\":\"<exact expected stdout, trimmed>\"}. These \
+         define 'done' — the program is run with args and its stdout must match. Make them \
+         concrete and correct per the GOAL (e.g. a factorial CLI: {\"args\":[\"5\"],\"stdout\":\"120\"}).";
+
+    if ext == "py" {
+        return format!(
+            "You are a build planner. Turn the GOAL into a DAG of small build tasks, one task per \
+             Python source file (a 'leaf' the builder will fill). Output ONLY a JSON array, no prose, \
+             in a single ```json fenced block.\n\n\
+             Each array element is:\n\
+             {{\"section\":\"§T\",\"op\":\"add\",\"payload\":{{\"id\":\"T1\",\"task\":\"<one clear sentence of what this file must contain>\",\"deps\":[],\"scope\":[\"<relative_file.py>\"],\"priority\":1}}}}\n\n\
+             Rules: ids are unique T1,T2,...; deps reference earlier ids that must build first (a real \
+             dependency DAG, no cycles); each scope is exactly ONE relative .py path; keep it MINIMAL — \
+             the fewest leaves that satisfy the goal. Each task sentence must be self-contained so the \
+             builder needs only that one sentence.\n\n\
+             STRONGLY PREFER A SINGLE FILE `main.py` — a small program is ONE leaf. The program task's \
+             file must run with `python3 main.py` using ONLY the Python standard library (NO pip, no \
+             third-party packages). It reads CLI args from `sys.argv` and prints results to stdout.\n\n\
+             For the program task (the runnable `main.py`), {accept_clause}\n\n\
+             GOAL: {goal}{retry}"
+        );
+    }
+
     format!(
         "You are a build planner. Turn the GOAL into a DAG of small build tasks, one task per \
          Rust source file (a 'leaf' the builder will fill). Output ONLY a JSON array, no prose, \
@@ -762,11 +808,7 @@ fn gen_prompt(goal: &str, feedback: &str) -> String {
          files ONLY when the goal is genuinely large. If you DO split: exactly one file is the crate \
          root `main.rs`, it contains `fn main`, and its task says it declares `mod <name>;` for every \
          other file (so the program links as one binary). Other files expose `pub` items only.\n\n\
-         For the crate-root task (the one with fn main), ALSO add an `accept` array to its payload: \
-         1-3 behavioural test cases proving the program does what the GOAL asks. Each case is \
-         {{\"args\":[\"<cli arg>\",...],\"stdout\":\"<exact expected stdout, trimmed>\"}}. These define \
-         'done' — the binary is run with args and its stdout must match. Make them concrete and correct \
-         per the GOAL (e.g. a factorial CLI: {{\"args\":[\"5\"],\"stdout\":\"120\"}}).\n\n\
+         For the crate-root task (the one with fn main), {accept_clause}\n\n\
          GOAL: {goal}{retry}"
     )
 }
