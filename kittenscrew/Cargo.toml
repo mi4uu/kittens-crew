@@ -2,7 +2,7 @@
 name = "kittenscrew"
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 description = "Spec-driven build pipeline — Rust core for the kitten plugin"
 
 # Self-contained workspace root (agents-config repo is not a Rust project).

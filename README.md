@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-MIT-15d6c6" alt="MIT"/>
+  <img src="https://img.shields.io/badge/license-AGPL--3.0-15d6c6" alt="AGPL-3.0-or-later"/>
   <img src="https://img.shields.io/badge/Claude_Code-plugin-e6007a" alt="Claude Code"/>
   <img src="https://img.shields.io/badge/Pi_·_opencode-AGENTS.md-9b59ff" alt="Pi / opencode"/>
   <img src="https://img.shields.io/badge/bench-bun-f9f1e1" alt="bun"/>
@@ -212,6 +212,21 @@ was the inspiration and the base this is built on. The laziness ladder is owed t
 [ponytail](https://github.com/DietrichGebert/ponytail). Thank you for the
 groundwork.
 
+## Support
+
+If this project saves you time, you can buy me a coffee:
+
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-mi4uu-ec4899?logo=github-sponsors&logoColor=white)](https://github.com/sponsors/mi4uu)
+[![PayPal](https://img.shields.io/badge/PayPal-mi4uuuu-00457C?logo=paypal&logoColor=white)](https://www.paypal.com/paypalme/mi4uuuu)
+
 ## license
 
-MIT.
+AGPL-3.0-or-later, see [LICENSE](LICENSE).
+
+Need it in a closed-source product, or can't meet the AGPL terms? Commercial licences are available on request: get in touch via [lipinski.work](https://lipinski.work).
+
+By sending a pull request you agree that your contribution may be offered under both the AGPL and a commercial licence.
+
+## Author
+
+Made by [Michał Lipiński](https://lipinski.work) ([GitHub](https://github.com/mi4uu)).
